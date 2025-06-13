@@ -9,15 +9,15 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung gestarteter und beendeter Proze
 - Log-Dateien im JSON-Format (täglich), standardmäßig unter:
 `C:\ProgramData\ProcessMonitor<yyyyMMdd>_processes.json`
 - Erkennt automatisch, ob als Windows-Dienst oder interaktiv gestartet
-- CLI-Modus inkl. Live-Ausgabe mit `q` zum Beenden
+- (CLI-Modus inkl. Live-Ausgabe mit `q` zum Beenden)
 - Logging enthält:
-- Prozessname
-- Prozess-ID
-- Pfad zur ausführbaren Datei
-- Kommandozeile
-- Benutzer-SID
-- Eventtyp (Start/Stop)
-- Zeitstempel
+  - Prozessname
+  - Prozess-ID
+  - Pfad zur ausführbaren Datei
+  - Kommandozeile
+  - Benutzer-SID
+  - Eventtyp (Start/Stop)
+  - Zeitstempel
 
 ## 2. Installation
 
