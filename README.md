@@ -58,6 +58,7 @@ Start-Service ProcessMonitorService
   (dotnet add package Microsoft.Extensions.Hosting.WindowsServices)
   dotnet add package Newtonsoft.Json
   dotnet add package System.Management
+  dotnet add package System.Management.Automation
   ```
 - Administratorrechte für:
   - Dienstinstallation

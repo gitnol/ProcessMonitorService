@@ -1,4 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
+  <ItemGroup>
+    <None Update="processmonitor.config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="install.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="uninstall.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+        <None Update="Setup-EventLog.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+        <None Update="Simple-EventLog-Setup.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -13,5 +30,6 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Management" Version="9.0.6" />
+    <PackageReference Include="System.Management.Automation" Version="7.5.1" />
   </ItemGroup>
 </Project>
