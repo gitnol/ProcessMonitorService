@@ -5,10 +5,11 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 ## Features
 
 - Überwachung von Prozessen über `__InstanceCreationEvent` und `__InstanceDeletionEvent`.
-- Filterung nach Prozessname (`--name`) und Executable-Pfad (`--path`).
-- Tägliche JSON-Log-Dateien, standardmäßig gespeichert unter: `C:\ProgramData\ProcessMonitor\<yyyyMMdd>_processes.json`.
+- Filterung nach Prozessname. Siehe `appsettings.json`. Änderungen an dieser Datei werden überwacht und eingelesen und aktualisieren den Filter im laufenden Betrieb.
+- Tägliche JSON-Log-Dateien, standardmäßig gespeichert unter: `C:\ProgramData\ProcessMonitor\service-<yyyyMMdd>.json`.
+  - Beispiel einer Zeile:
+    `{"@t":"2025-06-14T14:12:09.2452257Z","@mt":"Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Path: {ExecutablePath} Command: {CommandLine}","EventType":"Start","ProcessName":"CalculatorApp.exe","ProcessId":30316,"UserSid":"S-1-5-21-1234567890-1234567890-1234567890-1234","ExecutablePath":"C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe\\CalculatorApp.exe","CommandLine":"\"C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator_11.2502.2.0_x64__8wekyb3d8bbwe\\CalculatorApp.exe\"","SourceContext":"ProcessMonitorWorker","MachineName":"REDACTED","ThreadId":1}`
 - Automatische Erkennung, ob als Windows-Dienst oder interaktiv gestartet.
-- CLI-Modus mit Live-Ausgabe (beenden mit `q`).
 - Protokollierte Informationen:
   - Prozessname
   - Prozess-ID
