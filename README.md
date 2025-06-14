@@ -34,10 +34,11 @@ wird erstellt in `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorServ
   ```
 
 ### 2.2 Dienst installieren:
-benutzt: `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
-```powershell
-.\install.ps1
-```
+- benutzt: `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
+- Dienst startet automatisch nach Ausführung der `install.ps1`
+  ```powershell
+  .\install.ps1
+  ```
 
 ### 2.3 Dienst starten:
 ```powershell
@@ -66,6 +67,12 @@ Start-Service ProcessMonitorService
 ## 5. Hinweise
 - Für beendete Prozesse kann die Benutzer-SID nicht direkt mehr ausgelesen werden – sie wird daher zur Startzeit gespeichert und beim Stop-Ereignis wiederverwendet.
 - Verwendet `System.Management` (WMI/CIM), daher nur unter Windows lauffähig.
+- Wenn der Zugriff auf die Daten auf `Administratoren` (und `System`) beschränkt werden soll:
+  ```powershell
+  New-Item -Path "C:\ProgramData\ProcessMonitor" -ItemType Directory -Force
+  icacls "C:\ProgramData\ProcessMonitor" /inheritance:r
+  icacls "C:\ProgramData\ProcessMonitor" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
+  ```
 
 ## 6. Lizenz
 MIT – freie Nutzung, keine Garantie.
