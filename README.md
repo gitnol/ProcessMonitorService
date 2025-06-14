@@ -1,16 +1,15 @@
 # ProcessMonitorService
 
-Ein Windows-Dienst und CLI-Tool zur Überwachung gestarteter und beendeter Prozesse über WMI (CIM) Events. Die Ereignisse werden als JSON-Dateien protokolliert, inklusive Benutzer-SID, Pfad und Kommandozeile des Prozesses.
+Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) Events. Der Dienst protokolliert gestartete und beendete Prozesse in JSON-Dateien, inklusive Benutzer-SID, Pfad und Kommandozeile des Prozesses.
 
-## 1. Features
+## Features
 
-- Überwacht Prozesse via `__InstanceCreationEvent` und `__InstanceDeletionEvent`
-- Unterstützt Filterung nach Prozessname (`--name`) und Executable-Pfad (`--path`)
-- Log-Dateien im JSON-Format (täglich), standardmäßig unter:
-  `C:\ProgramData\ProcessMonitor<yyyyMMdd>_processes.json`
-- Erkennt automatisch, ob als Windows-Dienst oder interaktiv gestartet
-- (CLI-Modus inkl. Live-Ausgabe mit `q` zum Beenden)
-- Logging enthält:
+- Überwachung von Prozessen über `__InstanceCreationEvent` und `__InstanceDeletionEvent`.
+- Filterung nach Prozessname (`--name`) und Executable-Pfad (`--path`).
+- Tägliche JSON-Log-Dateien, standardmäßig gespeichert unter: `C:\ProgramData\ProcessMonitor\<yyyyMMdd>_processes.json`.
+- Automatische Erkennung, ob als Windows-Dienst oder interaktiv gestartet.
+- CLI-Modus mit Live-Ausgabe (beenden mit `q`).
+- Protokollierte Informationen:
   - Prozessname
   - Prozess-ID
   - Pfad zur ausführbaren Datei
@@ -19,23 +18,23 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung gestarteter und beendeter Proze
   - Eventtyp (Start/Stop)
   - Zeitstempel
 
-## 2. Installation
+## Installation
 
-### 2.1 Kompilieren mit `.NET 9` (z. B. über Visual Studio oder CLI)
+### Kompilieren mit .NET 9
 
-- Debug Build:
+- **Debug Build:**
 
   ```powershell
   dotnet build
   ```
 
-- Publish Build:
+- **Publish Build:**
   wird erstellt in `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
   ```powershell
   dotnet publish -c Release -r win-x64 --self-contained true
   ```
 
-### 2.2 Dienst installieren:
+### Dienst installieren:
 
 - benutzt: `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
 - Dienst startet automatisch nach Ausführung der `install.ps1`
@@ -43,19 +42,19 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung gestarteter und beendeter Proze
   .\install.ps1
   ```
 
-### 2.3 Dienst starten:
+### Dienst starten:
 
 ```powershell
 Start-Service ProcessMonitorService
 ```
 
-## 3. Deinstallation
+## Deinstallation
 
 ```powershell
 .\uninstall.ps1
 ```
 
-## 4. Voraussetzungen
+## Voraussetzungen
 
 - .NET 9 SDK
 - Pakete:
@@ -63,21 +62,21 @@ Start-Service ProcessMonitorService
   dotnet add package Microsoft.Extensions.Hosting --version 9.0.6
   dotnet add package Microsoft.Extensions.Hosting.WindowsServices
   dotnet add package Microsoft.Management.Infrastructure
-  
+  dotnet add package Microsoft.Extensions.Diagnostics.HealthChecks
   dotnet add package System.Management
   dotnet add package System.Management.Automation
-  
   dotnet add package Serilog.Extensions.Hosting
   dotnet add package Serilog.Settings.Configuration
   dotnet add package Serilog.Sinks.Console
   dotnet add package Serilog.Sinks.File
+  dotnet add package Serilog.Formatting.Compact
   ```
 - Administratorrechte für:
   - Dienstinstallation
   - Zugriff auf Prozessinformationen
   - Schreiben nach C:\ProgramData
 
-## 5. Hinweise
+## Hinweise
 
 - Für beendete Prozesse kann die Benutzer-SID nicht direkt mehr ausgelesen werden – sie wird daher zur Startzeit gespeichert und beim Stop-Ereignis wiederverwendet.
 - Verwendet `System.Management` (WMI/CIM), daher nur unter Windows lauffähig.
@@ -88,6 +87,6 @@ Start-Service ProcessMonitorService
   icacls "C:\ProgramData\ProcessMonitor" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
   ```
 
-## 6. Lizenz
+## Lizenz
 
 MIT – freie Nutzung, keine Garantie.

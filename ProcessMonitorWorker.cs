@@ -1,75 +1,161 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Management.Infrastructure;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Management;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-public class ProcessMonitorWorker : BackgroundService
+// Configuration Models
+public class ProcessMonitorOptions
 {
-    private readonly ILogger<ProcessMonitorWorker> _logger;
-    private List<string> _processFilter;
-    private readonly ConcurrentDictionary<int, string> _processSidCache = new();
+    public List<string> ProcessFilters { get; set; } = new();
+    public int CacheExpiryMinutes { get; set; } = 30;
+    public int StatusUpdateIntervalMinutes { get; set; } = 5;
+    public int CacheCleanupIntervalMinutes { get; set; } = 10;
+}
 
-    private ManagementEventWatcher? _startWatcher;
-    private ManagementEventWatcher? _stopWatcher;
+// Services
+public interface IProcessOwnerService
+{
+    Task<string> GetProcessOwnerSidAsync(int processId);
+}
 
-    public ProcessMonitorWorker(ILogger<ProcessMonitorWorker> logger)
+public class ProcessOwnerService : IProcessOwnerService, IDisposable
+{
+    private readonly ILogger<ProcessOwnerService> _logger;
+    private readonly Lazy<CimSession> _cimSession;
+    private bool _disposed = false;
+
+    public ProcessOwnerService(ILogger<ProcessOwnerService> logger)
     {
         _logger = logger;
-        _processFilter = new List<string>();
+        _cimSession = new Lazy<CimSession>(() => CimSession.Create(null));
     }
 
-    private List<string> LoadProcessFilterConfig()
+    public async Task<string> GetProcessOwnerSidAsync(int processId)
     {
-        string configPath = Path.Combine(AppContext.BaseDirectory, "processmonitor.config.json");
-
-        if (!File.Exists(configPath))
-        {
-            _logger.LogWarning("Konfigurationsdatei nicht gefunden: {ConfigPath}. Erstelle eine Standardkonfiguration.", configPath);
-            var defaultConfig = new List<string> { "notepad.exe", "calc.exe", "powershell.exe", "cmd.exe" };
-            try
-            {
-                var defaultConfigJson = JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(configPath, defaultConfigJson);
-                _logger.LogInformation("Standard-Konfigurationsdatei wurde erfolgreich erstellt: {ConfigPath}", configPath);
-                return defaultConfig;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fehler beim Erstellen der Standard-Konfigurationsdatei unter {ConfigPath}", configPath);
-                return new List<string>();
-            }
-        }
-
         try
         {
-            string json = File.ReadAllText(configPath);
-            var config = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
-            _logger.LogInformation("Konfiguration erfolgreich geladen mit {FilterCount} Filtern: {ProcessFilter}", config.Count, string.Join(", ", config));
-            return config;
+            return await Task.Run(() =>
+            {
+                var query = $"SELECT * FROM Win32_Process WHERE ProcessId = {processId}";
+                var result = _cimSession.Value.QueryInstances(@"root\cimv2", "WQL", query).FirstOrDefault();
+
+                if (result == null)
+                {
+                    _logger.LogError("Process with ID {ProcessId} not found.", processId);
+                    return "UNKNOWN_PROCESS_NOT_FOUND";
+                }
+
+                try
+                {
+                    var methodResult = _cimSession.Value.InvokeMethod(result, "GetOwnerSid", null);
+                    return methodResult?.OutParameters?["Sid"]?.Value?.ToString() ?? "UNKNOWN_SID_NOT_FOUND";
+                }
+                catch (CimException cimEx)
+                {
+                    _logger.LogError(cimEx, "CIM method 'GetOwnerSid' failed for process {ProcessId}", processId);
+                    return "ERROR_GETTING_SID";
+                }
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fehler beim Laden oder Parsen der Konfigurationsdatei: {ConfigPath}", configPath);
-            return new List<string>();
+            _logger.LogError(ex, "Error getting SID for process {ProcessId}", processId);
+            return "ERROR_GETTING_SID";
         }
+    }
+
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed && disposing)
+        {
+            if (_cimSession.IsValueCreated)
+            {
+                _cimSession.Value?.Dispose();
+            }
+        }
+        _disposed = true;
+    }
+}
+
+// Cache Entry Model
+public class ProcessCacheEntry
+{
+    public string Sid { get; set; } = string.Empty;
+    public DateTime LastAccess { get; set; } = DateTime.UtcNow;
+
+    public void UpdateAccess()
+    {
+        LastAccess = DateTime.UtcNow;
+    }
+}
+
+// Main Worker Class
+public class ProcessMonitorWorker : BackgroundService
+{
+    private readonly ILogger<ProcessMonitorWorker> _logger;
+    private readonly IOptionsMonitor<ProcessMonitorOptions> _optionsMonitor;
+    private readonly IProcessOwnerService _processOwnerService;
+
+    private HashSet<string> _processFilterSet = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<int, ProcessCacheEntry> _processSidCache = new();
+
+    private ManagementEventWatcher? _startWatcher;
+    private ManagementEventWatcher? _stopWatcher;
+    private Timer? _cacheCleanupTimer;
+    private Timer? _statusTimer;
+
+    private ProcessMonitorOptions _currentOptions;
+    private bool _disposed = false;
+
+    public ProcessMonitorWorker(
+        ILogger<ProcessMonitorWorker> logger,
+        IOptionsMonitor<ProcessMonitorOptions> optionsMonitor,
+        IProcessOwnerService processOwnerService)
+    {
+        _logger = logger;
+        _optionsMonitor = optionsMonitor;
+        _processOwnerService = processOwnerService;
+        _currentOptions = _optionsMonitor.CurrentValue;
+
+        UpdateProcessFilters(_currentOptions.ProcessFilters);
+
+        // Configuration change handler
+        _optionsMonitor.OnChange(options =>
+        {
+            _logger.LogInformation("Configuration changed, reloading settings");
+            _currentOptions = options;
+            UpdateProcessFilters(options.ProcessFilters);
+        });
+    }
+
+    private void UpdateProcessFilters(List<string> filters)
+    {
+        _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        _logger.LogInformation("Process filters updated: {FilterCount} filters loaded", _processFilterSet.Count);
+        _logger.LogDebug("Active filters: {@ProcessFilters}", _processFilterSet.ToArray());
     }
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("=== ProcessMonitorWorker wird gestartet ===");
-        _logger.LogInformation("Arbeitsverzeichnis: {BaseDirectory}", AppContext.BaseDirectory);
-        _logger.LogInformation("Benutzerkontext: {UserName}", Environment.UserName);
+        _logger.LogInformation("=== ProcessMonitorWorker starting ===");
+        _logger.LogInformation("Base directory: {BaseDirectory}", AppContext.BaseDirectory);
+        _logger.LogInformation("User context: {UserName}", Environment.UserName);
+        _logger.LogInformation("Active process filters: {FilterCount}", _processFilterSet.Count);
 
-        _processFilter = LoadProcessFilterConfig();
-        
         return base.StartAsync(cancellationToken);
     }
 
@@ -77,116 +163,232 @@ public class ProcessMonitorWorker : BackgroundService
     {
         try
         {
-            string baseQuery = "TargetInstance ISA 'Win32_Process'";
-            string creationQuery = $"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE {baseQuery}";
-            string deletionQuery = $"SELECT * FROM __InstanceDeletionEvent WITHIN 1 WHERE {baseQuery}";
+            await InitializeWmiWatchersAsync(stoppingToken);
+            InitializeTimers();
 
-            _startWatcher = new ManagementEventWatcher(new WqlEventQuery(creationQuery));
-            _stopWatcher = new ManagementEventWatcher(new WqlEventQuery(deletionQuery));
+            _logger.LogInformation("✓ ProcessMonitorWorker successfully started");
 
-            _startWatcher.EventArrived += (s, e) => LogProcessEvent(e, "Start");
-            _stopWatcher.EventArrived += (s, e) => LogProcessEvent(e, "Stop");
-
-            _logger.LogInformation("Starte WMI Event Watcher...");
-            _startWatcher.Start();
-            _stopWatcher.Start();
-            _logger.LogInformation("✓ WMI Event Watcher erfolgreich gestartet.");
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                // Status-Update alle 5 Minuten
-                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
-                _logger.LogInformation("Service läuft. Aktive Prozesse im Cache: {CacheCount}", _processSidCache.Count);
-            }
+            // Keep service running
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("ProcessMonitorWorker wird ordnungsgemäß beendet (OperationCanceledException).");
+            _logger.LogInformation("ProcessMonitorWorker stopping gracefully");
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "KRITISCHER FEHLER in ProcessMonitorWorker ExecuteAsync. Der Dienst wird möglicherweise instabil.");
+            _logger.LogCritical(ex, "CRITICAL ERROR in ProcessMonitorWorker. Service may become unstable");
+            throw; // Re-throw to trigger service restart
         }
     }
 
-    private void LogProcessEvent(EventArrivedEventArgs e, string eventType)
+    private async Task InitializeWmiWatchersAsync(CancellationToken cancellationToken)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                const string baseQuery = "TargetInstance ISA 'Win32_Process'";
+                const string creationQuery = $"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE {baseQuery}";
+                const string deletionQuery = $"SELECT * FROM __InstanceDeletionEvent WITHIN 1 WHERE {baseQuery}";
+
+                _startWatcher = new ManagementEventWatcher(new WqlEventQuery(creationQuery));
+                _stopWatcher = new ManagementEventWatcher(new WqlEventQuery(deletionQuery));
+
+                _startWatcher.EventArrived += OnProcessStarted;
+                _stopWatcher.EventArrived += OnProcessStopped;
+
+                _logger.LogInformation("Starting WMI event watchers...");
+                _startWatcher.Start();
+                _stopWatcher.Start();
+                _logger.LogInformation("✓ WMI event watchers started successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize WMI watchers");
+                throw;
+            }
+        }, cancellationToken);
+    }
+
+    private void InitializeTimers()
+    {
+        // Cache cleanup timer
+        var cleanupInterval = TimeSpan.FromMinutes(_currentOptions.CacheCleanupIntervalMinutes);
+        _cacheCleanupTimer = new Timer(CleanupExpiredCacheEntries, null, cleanupInterval, cleanupInterval);
+
+        // Status update timer
+        var statusInterval = TimeSpan.FromMinutes(_currentOptions.StatusUpdateIntervalMinutes);
+        _statusTimer = new Timer(LogStatusUpdate, null, statusInterval, statusInterval);
+
+        _logger.LogInformation("Timers initialized - Cache cleanup: {CleanupInterval}min, Status: {StatusInterval}min",
+            _currentOptions.CacheCleanupIntervalMinutes, _currentOptions.StatusUpdateIntervalMinutes);
+    }
+
+    private void OnProcessStarted(object sender, EventArrivedEventArgs e)
+    {
+        try
+        {
+            _ = Task.Run(async () => await HandleProcessEventAsync(e, "Start"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in process start event handler");
+        }
+    }
+
+    private void OnProcessStopped(object sender, EventArrivedEventArgs e)
+    {
+        try
+        {
+            _ = Task.Run(async () => await HandleProcessEventAsync(e, "Stop"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in process stop event handler");
+        }
+    }
+
+    private async Task HandleProcessEventAsync(EventArrivedEventArgs e, string eventType)
     {
         try
         {
             var process = (ManagementBaseObject)e.NewEvent["TargetInstance"];
-            string name = process["Name"]?.ToString() ?? "N/A";
+            var name = process["Name"]?.ToString() ?? "N/A";
 
-            if (_processFilter.Any() && !_processFilter.Contains(name, StringComparer.OrdinalIgnoreCase))
+            // Filter check - early return if not monitored
+            if (_processFilterSet.Any() && !_processFilterSet.Contains(name))
             {
-                return; // Prozess wird durch Filter ignoriert
+                return;
             }
 
-            int pid = Convert.ToInt32(process["ProcessId"]);
-            string sid = "UNKNOWN";
+            var pid = Convert.ToInt32(process["ProcessId"]);
+            var sid = "UNKNOWN";
 
             if (eventType == "Start")
             {
-                sid = GetProcessOwnerSidCim(pid);
-                _processSidCache[pid] = sid;
+                sid = await _processOwnerService.GetProcessOwnerSidAsync(pid);
+                _processSidCache[pid] = new ProcessCacheEntry { Sid = sid };
             }
             else if (eventType == "Stop")
             {
-                if (_processSidCache.TryRemove(pid, out var cachedSid))
+                if (_processSidCache.TryRemove(pid, out var cachedEntry))
                 {
-                    sid = cachedSid;
+                    sid = cachedEntry.Sid;
                 }
             }
-            
-            _logger.LogInformation(
-                "Process Event: {EventType} | Name: {ProcessName} | PID: {ProcessId} | UserSID: {UserSid} | Path: {ExecutablePath} | CommandLine: {CommandLine}",
-                eventType,
-                name,
-                pid,
-                sid,
-                process["ExecutablePath"]?.ToString(),
-                process["CommandLine"]?.ToString()
-            );
+
+            LogProcessEvent(eventType, name, pid, sid, process);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Fehler bei der Verarbeitung eines Prozess-Events ({EventType})", eventType);
+            _logger.LogError(ex, "Error handling process event: {EventType}", eventType);
         }
     }
 
-    private static string GetProcessOwnerSidCim(int pid)
+    private void LogProcessEvent(string eventType, string name, int pid, string sid, ManagementBaseObject process)
+    {
+        _logger.LogInformation(
+            "Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Path: {ExecutablePath} Command: {CommandLine}",
+            eventType,
+            name,
+            pid,
+            sid,
+            process["ExecutablePath"]?.ToString() ?? "N/A",
+            process["CommandLine"]?.ToString() ?? "N/A"
+        );
+    }
+
+    private void CleanupExpiredCacheEntries(object? state)
     {
         try
         {
-            using var session = CimSession.Create(null);
-            var query = $"SELECT * FROM Win32_Process WHERE ProcessId = {pid}";
-            var result = session.QueryInstances(@"root\cimv2", "WQL", query).FirstOrDefault();
+            var expiryTime = TimeSpan.FromMinutes(_currentOptions.CacheExpiryMinutes);
+            var cutoffTime = DateTime.UtcNow - expiryTime;
 
-            if (result == null) return "UNKNOWN_PROCESS_NOT_FOUND";
+            var expiredKeys = _processSidCache
+                .Where(kvp => kvp.Value.LastAccess < cutoffTime)
+                .Select(kvp => kvp.Key)
+                .ToList();
 
-            var methodResult = session.InvokeMethod(result, "GetOwnerSid", null);
-            return methodResult?.OutParameters?["Sid"]?.Value?.ToString() ?? "UNKNOWN_SID_NOT_FOUND";
+            var removedCount = 0;
+            foreach (var key in expiredKeys)
+            {
+                if (_processSidCache.TryRemove(key, out _))
+                {
+                    removedCount++;
+                }
+            }
+
+            if (removedCount > 0)
+            {
+                _logger.LogDebug("Cache cleanup: removed {RemovedCount} expired entries, {RemainingCount} entries remaining",
+                    removedCount, _processSidCache.Count);
+            }
         }
         catch (Exception ex)
         {
-            // Loggen wäre hier gut, aber wir haben keinen ILogger in einer statischen Methode.
-            // Daher Rückgabe eines Fehler-Strings.
-            Console.WriteLine($"Error in GetProcessOwnerSidCim for PID {pid}: {ex.Message}");
-            return "ERROR_GETTING_SID";
+            _logger.LogError(ex, "Error during cache cleanup");
+        }
+    }
+
+    private void LogStatusUpdate(object? state)
+    {
+        try
+        {
+            _logger.LogInformation("Service status: Running. Cache entries: {CacheCount}, Active filters: {FilterCount}",
+                _processSidCache.Count, _processFilterSet.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during status update");
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("=== ProcessMonitorWorker wird beendet ===");
-        
-        _startWatcher?.Stop();
-        _stopWatcher?.Stop();
-        _startWatcher?.Dispose();
-        _stopWatcher?.Dispose();
+        _logger.LogInformation("=== ProcessMonitorWorker stopping ===");
 
-        _logger.LogInformation("✓ WMI Event Watcher erfolgreich beendet.");
-        _logger.LogInformation("✓ Service beendet um: {StopTime}. Prozesse im Cache beim Beenden: {CacheCount}", DateTime.Now, _processSidCache.Count);
-        
+        try
+        {
+            // Stop timers
+            _cacheCleanupTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            _statusTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
+            // Stop WMI watchers
+            _startWatcher?.Stop();
+            _stopWatcher?.Stop();
+
+            _logger.LogInformation("✓ WMI event watchers stopped successfully");
+            _logger.LogInformation("✓ Service stopped at: {StopTime}. Final cache count: {CacheCount}",
+                DateTime.Now, _processSidCache.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during service shutdown");
+        }
+
         await base.StopAsync(cancellationToken);
+    }
+
+    public override void Dispose()
+    {
+        if (!_disposed)
+        {
+            try
+            {
+                _startWatcher?.Dispose();
+                _stopWatcher?.Dispose();
+                _cacheCleanupTimer?.Dispose();
+                _statusTimer?.Dispose();
+                (_processOwnerService as IDisposable)?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error during disposal");
+            }
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
     }
 }
