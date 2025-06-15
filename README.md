@@ -125,6 +125,82 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
   icacls "C:\ProgramData\ProcessMonitor" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
   ```
 
+## Log-Analyse mit PowerShell
+
+Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komfortable Analyse der JSON-Log-Dateien.
+
+### Verwendung
+
+**Grundlegende Verwendung:**
+```powershell
+# Alle Events des aktuellen Tages anzeigen
+.\process-JSONFiles.ps1
+
+# Nach spezifischem Prozess filtern
+.\process-JSONFiles.ps1 -ProcessName "chrome.exe"
+
+# Nur Start-Events anzeigen
+.\process-JSONFiles.ps1 -EventType "Start"
+
+# Events der letzten 7 Tage
+.\process-JSONFiles.ps1 -Days 7
+
+# Kombinierte Filter
+.\process-JSONFiles.ps1 -ProcessName "notepad.exe" -EventType "Start" -Days 3
+```
+
+**Export-Funktionen:**
+```powershell
+# Events in CSV-Datei exportieren
+.\process-JSONFiles.ps1 -Export
+
+# Gefilterte Events exportieren
+.\process-JSONFiles.ps1 -ProcessName "chrome.exe" -Days 7 -Export
+```
+
+### Parameter
+
+| Parameter | Beschreibung | Standard |
+|-----------|--------------|----------|
+| `-LogPath` | Pfad zu den JSON-Log-Dateien | `C:\ProgramData\ProcessMonitorService\logs\service-*.json` |
+| `-ProcessName` | Filter nach Prozessname (z.B. "chrome.exe") | Alle Prozesse |
+| `-EventType` | Filter nach Event-Typ: "Start", "Stop", "All" | "All" |
+| `-Days` | Zeigt Events der letzten X Tage | 1 |
+| `-Export` | Exportiert Ergebnisse in CSV-Datei | Nein |
+
+### Ausgabeformat
+
+Das Skript zeigt folgende Informationen an:
+- **Timestamp**: Datum und Uhrzeit des Events
+- **EventType**: "Start" oder "Stop"
+- **ProcessName**: Name der ausführbaren Datei
+- **ProcessId**: Prozess-ID
+- **UserSid**: Benutzer-SID
+- **ExecutablePath**: Vollständiger Pfad zur Datei
+- **CommandLine**: Verwendete Kommandozeile
+
+### Beispiel-Ausgabe
+
+```
+=== ProcessMonitorService Log-Analyse ===
+✅ Gefundene Dateien: 3
+📈 Gesamte Process-Events: 142
+🔍 Nach Prozessname 'chrome.exe' gefiltert: 28
+
+📋 Gefilterte Events:
+Timestamp           EventType ProcessName ProcessId UserSid                                     
+---------           --------- ----------- --------- -------                                     
+2025-06-15 09:15:32 Start     chrome.exe  1234      S-1-5-21-123456789-123456789-123456789-1001
+2025-06-15 09:15:45 Stop      chrome.exe  1234      S-1-5-21-123456789-123456789-123456789-1001
+
+📊 Statistiken:
+Name        Count
+----        -----
+chrome.exe     28
+notepad.exe    15
+calc.exe        8
+```
+
 ## Lizenz
 
 MIT – freie Nutzung, keine Garantie.
