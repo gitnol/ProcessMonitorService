@@ -142,13 +142,6 @@ public class ProcessMonitorWorker : BackgroundService
         });
     }
 
-    private void UpdateProcessFilters(List<string> filters)
-    {
-        _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-        _logger.LogInformation("Process filters updated: {FilterCount} filters loaded", _processFilterSet.Count);
-        _logger.LogDebug("Active filters: {@ProcessFilters}", _processFilterSet.ToArray());
-    }
-
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("=== ProcessMonitorWorker starting ===");
@@ -188,9 +181,15 @@ public class ProcessMonitorWorker : BackgroundService
         {
             try
             {
-                const string baseQuery = "TargetInstance ISA 'Win32_Process'";
-                const string creationQuery = $"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE {baseQuery}";
-                const string deletionQuery = $"SELECT * FROM __InstanceDeletionEvent WITHIN 1 WHERE {baseQuery}";
+                // Dynamische WQL-Query basierend auf den konfigurierten Filtern
+                string processFilter = BuildProcessFilter();
+
+                string baseQuery = string.IsNullOrEmpty(processFilter)
+                    ? "TargetInstance ISA 'Win32_Process'"
+                    : $"TargetInstance ISA 'Win32_Process' AND ({processFilter})";
+
+                string creationQuery = $"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE {baseQuery}";
+                string deletionQuery = $"SELECT * FROM __InstanceDeletionEvent WITHIN 1 WHERE {baseQuery}";
 
                 _startWatcher = new ManagementEventWatcher(new WqlEventQuery(creationQuery));
                 _stopWatcher = new ManagementEventWatcher(new WqlEventQuery(deletionQuery));
@@ -198,7 +197,8 @@ public class ProcessMonitorWorker : BackgroundService
                 _startWatcher.EventArrived += OnProcessStarted;
                 _stopWatcher.EventArrived += OnProcessStopped;
 
-                _logger.LogInformation("Starting WMI event watchers...");
+                _logger.LogInformation("Starting WMI event watchers with filter: {ProcessFilter}",
+                    string.IsNullOrEmpty(processFilter) ? "ALL PROCESSES" : processFilter);
                 _startWatcher.Start();
                 _stopWatcher.Start();
                 _logger.LogInformation("✓ WMI event watchers started successfully");
@@ -211,6 +211,53 @@ public class ProcessMonitorWorker : BackgroundService
         }, cancellationToken);
     }
 
+    private string BuildProcessFilter()
+    {
+        if (!_processFilterSet.Any())
+        {
+            return string.Empty; // Keine Filter = alle Prozesse überwachen
+        }
+
+        // WQL OR-Bedingungen für alle gefilterten Prozesse erstellen
+        var conditions = _processFilterSet
+            .Select(processName => $"TargetInstance.Name = '{processName}'")
+            .ToArray();
+
+        return string.Join(" OR ", conditions);
+    }
+
+    private void UpdateProcessFilters(List<string> filters)
+    {
+        _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        _logger.LogInformation("Process filters updated: {FilterCount} filters loaded", _processFilterSet.Count);
+        _logger.LogDebug("Active filters: {@ProcessFilters}", _processFilterSet.ToArray());
+
+        // WMI-Watcher neu initialisieren, wenn sie bereits laufen
+        if (_startWatcher != null || _stopWatcher != null)
+        {
+            _logger.LogInformation("Reinitializing WMI watchers due to filter change");
+            RestartWatchers();
+        }
+    }
+
+    private void RestartWatchers()
+    {
+        try
+        {
+            // Alte Watcher stoppen und dispose
+            _startWatcher?.Stop();
+            _stopWatcher?.Stop();
+            _startWatcher?.Dispose();
+            _stopWatcher?.Dispose();
+
+            // Neu initialisieren
+            InitializeWmiWatchersAsync(CancellationToken.None).Wait();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error restarting WMI watchers");
+        }
+    }
     private void InitializeTimers()
     {
         // Cache cleanup timer
