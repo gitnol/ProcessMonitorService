@@ -23,6 +23,9 @@
 .PARAMETER Export
     Exportiert gefilterte Ergebnisse in CSV-Datei
 
+.PARAMETER ForPipeline
+    Ermöglicht Weiterverarbeitung der Ergebnisse über eine Pipeline
+
 .EXAMPLE
     .\process-JSONFiles.ps1
     Zeigt alle Events des aktuellen Tages
@@ -42,7 +45,8 @@ param(
     [ValidateSet("Start", "Stop", "All")]
     [string]$EventType = "All",
     [int]$Days = 1,
-    [switch]$Export
+    [switch]$Export,
+    [switch]$ForPipeline
 )
 
 function Write-ColorOutput {
@@ -63,7 +67,8 @@ function Get-ProcessEvents {
             $myEvents = $content | ForEach-Object {
                 try {
                     $_ | ConvertFrom-Json
-                } catch {
+                }
+                catch {
                     Write-Warning "Fehlerhafte JSON-Zeile in $($file.Name): $_"
                 }
             }
@@ -82,19 +87,20 @@ function Format-ProcessEvent {
     param($myEvent)
     
     $timestamp = if ($myEvent.'@t') { 
-        [DateTime]::Parse($myEvent.'@t').ToString("yyyy-MM-dd HH:mm:ss") 
-    } else { 
+        ([DateTime]$myEvent.'@t').ToString("yyyy-MM-dd HH:mm:ss") 
+    }
+    else { 
         "N/A" 
     }
     
     [PSCustomObject]@{
-        Timestamp = $timestamp
-        EventType = $myEvent.EventType ?? "N/A"
-        ProcessName = $myEvent.ProcessName ?? "N/A"
-        ProcessId = $myEvent.ProcessId ?? "N/A"
-        UserSid = $myEvent.UserSid ?? "N/A"
+        Timestamp      = $timestamp
+        EventType      = $myEvent.EventType ?? "N/A"
+        ProcessName    = $myEvent.ProcessName ?? "N/A"
+        ProcessId      = $myEvent.ProcessId ?? "N/A"
+        UserSid        = $myEvent.UserSid ?? "N/A"
         ExecutablePath = $myEvent.ExecutablePath ?? "N/A"
-        CommandLine = $myEvent.CommandLine ?? "N/A"
+        CommandLine    = $myEvent.CommandLine ?? "N/A"
     }
 }
 
@@ -156,6 +162,9 @@ try {
             $exportPath = "ProcessEvents_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
             $formattedEvents | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8
             Write-ColorOutput "💾 Events exportiert nach: $exportPath" -Color "Green"
+        }
+        elseif ($ForPipeline) {
+            $formattedEvents
         }
         else {
             Write-ColorOutput "`n📋 Gefilterte Events:" -Color "Cyan"
