@@ -59,14 +59,16 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 {
   "ProcessMonitor": {
     "ProcessFilters": [ "notepad.exe", "calc.exe" ],
-    "CacheExpiryMinutes": 30,
+    "CacheExpiryMinutes": 30, // 1440 = Prozesse aus dem Cache entfernen, die älter als ein Tag sind
     "StatusUpdateIntervalMinutes": 5,
     "CacheCleanupIntervalMinutes": 10
   }
 }
 ```
 - Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden.
-- `LogDirectory` legt das Verzeichnis für die Log-Dateien fest.
+- `StatusUpdateIntervalMinutes`: Gibt nach wiederkehrenden `5` Minuten eine Statusmeldung aus: `Service status: Running. Cache entries: {CacheCount}, Active filters: {FilterCount}`
+- `CacheCleanupIntervalMinutes`: Nach `10` Minuten wird der Cache Aufräumvorgang gestartet. Es werden dann die Prozesse aus dem Cache entfernt, welche ein Alter von `CacheExpiryMinutes` Minuten besitzen
+- `CacheExpiryMinutes`: Prozesse, die länger laufen als `30` Minuten, werden beim Cache Aufräumvorgang nach `CacheCleanupIntervalMinutes` aus dem Cache entfernt.
 
 ## Voraussetzungen für die Installation / Ausführung
 
