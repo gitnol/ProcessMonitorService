@@ -170,6 +170,9 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 
 # Kombinierte Filter
 .\process-JSONFiles.ps1 -ProcessName "notepad.exe" -EventType "Start" -Days 3
+
+# Kombinierte Filter mit Ausgabe und Auswahlmöglichkeit im GridView und Ausgabe wieder in der Pipeline
+.\process-JSONFiles.ps1 -ProcessName "chrome.exe" -EventType "All" -Days 3 -ForPipeline | Out-GridView -Title "Notepad Prozessereignisse der letzten drei Tage" -PassThru | % {$_}
 ```
 
 **Export-Funktionen:**
@@ -190,6 +193,7 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 | `-EventType` | Filter nach Event-Typ: "Start", "Stop", "All" | "All" |
 | `-Days` | Zeigt Events der letzten X Tage | 1 |
 | `-Export` | Exportiert Ergebnisse in CSV-Datei | Nein |
+| `-ForPipeline` | Ermöglicht Weiterverarbeitung der Ergebnisse über eine Pipeline | Nein |
 
 ## Ausgabeformat
 
