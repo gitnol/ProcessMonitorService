@@ -1,3 +1,22 @@
+- [ProcessMonitorService](#processmonitorservice)
+  - [Features](#features)
+  - [Beispielhafte Log-Ausgabe nach `service-<yyyyMMdd>.json`](#beispielhafte-log-ausgabe-nach-service-yyyymmddjson)
+  - [Beispiel für `appsettings.json`](#beispiel-für-appsettingsjson)
+  - [Voraussetzungen für die Installation / Ausführung](#voraussetzungen-für-die-installation--ausführung)
+  - [Installation](#installation)
+    - [Kompilieren mit .NET 9](#kompilieren-mit-net-9)
+    - [Dienst installieren](#dienst-installieren)
+    - [Dienst starten](#dienst-starten)
+    - [Deinstallation](#deinstallation)
+  - [Nutzung als CLI-Tool](#nutzung-als-cli-tool)
+  - [Hinweise](#hinweise)
+- [Log-Analyse mit PowerShell](#log-analyse-mit-powershell)
+  - [Verwendung](#verwendung)
+  - [Parameter](#parameter)
+  - [Ausgabeformat](#ausgabeformat)
+  - [Beispiel-Ausgabe](#beispiel-ausgabe)
+- [Lizenz](#lizenz)
+
 # ProcessMonitorService
 
 Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) Events. Der Dienst protokolliert gestartete und beendete Prozesse in JSON-Dateien, inklusive Benutzer-SID, Pfad und Kommandozeile.
@@ -7,7 +26,7 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 - Überwachung von Prozessen über `__InstanceCreationEvent` und `__InstanceDeletionEvent`.
 - Filterung nach Prozessname. Konfigurierbar über `appsettings.json`. Änderungen an dieser Datei werden automatisch erkannt und übernommen.
 - Tägliche JSON-Log-Dateien, standardmäßig gespeichert unter:  
-  `C:\ProgramData\ProcessMonitor\service-<yyyyMMdd>.json`
+  `C:\ProgramData\ProcessMonitorService\service-<yyyyMMdd>.json`
 - Automatische Erkennung, ob als Windows-Dienst oder interaktiv (CLI) gestartet.
 - Protokollierte Informationen:
   - Prozessname
@@ -18,7 +37,7 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
   - Eventtyp (Start/Stop)
   - Zeitstempel
 
-## Beispielhafte Log-Ausgabe
+## Beispielhafte Log-Ausgabe nach `service-<yyyyMMdd>.json`
 
 ```json
 {
@@ -49,51 +68,19 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 - Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden.
 - `LogDirectory` legt das Verzeichnis für die Log-Dateien fest.
 
+## Voraussetzungen für die Installation / Ausführung
+
+- .NET 9
+- Administratorrechte für:
+  - Dienstinstallation
+  - Zugriff auf Prozessinformationen
+  - Schreiben nach `C:\ProgramData\ProcessMonitorService`
+
 ## Installation
 
 ### Kompilieren mit .NET 9
 
-**Debug Build:**
-```powershell
-dotnet build
-```
-
-**Publish Build:**  
-Wird erstellt in `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
-```powershell
-dotnet publish -c Release -r win-x64 --self-contained true
-```
-
-### Dienst installieren:
-
-- Verwendet: `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
-- Dienst startet automatisch nach Ausführung der `install.ps1`
-```powershell
-.\install.ps1
-```
-
-### Dienst starten:
-
-```powershell
-Start-Service ProcessMonitorService
-```
-
-## Nutzung als CLI-Tool
-
-Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrechten) gestartet werden. Es überwacht dann Prozesse interaktiv und gibt die Logs in die Konsole und in die Log-Datei aus.
-
-```powershell
-.\ProcessMonitorService.exe
-```
-- Zum Beenden `Strg+C` verwenden.
-
-## Deinstallation
-
-```powershell
-.\uninstall.ps1
-```
-
-## Voraussetzungen
+**Voraussetzungen**
 
 - .NET 9 SDK
 - Pakete:
@@ -109,10 +96,46 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
   dotnet add package Serilog.Sinks.File
   dotnet add package Serilog.Formatting.Compact
   ```
-- Administratorrechte für:
-  - Dienstinstallation
-  - Zugriff auf Prozessinformationen
-  - Schreiben nach `C:\ProgramData`
+
+**Debug Build:**
+```powershell
+dotnet build
+```
+
+**Publish Build:**  
+Wird erstellt in `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true
+```
+
+### Dienst installieren
+
+- Verwendet: `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
+- Dienst startet automatisch nach Ausführung der `install.ps1`
+```powershell
+.\install.ps1
+```
+
+### Dienst starten
+
+```powershell
+Start-Service ProcessMonitorService
+```
+
+### Deinstallation
+
+```powershell
+.\uninstall.ps1
+```
+
+## Nutzung als CLI-Tool
+
+Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrechten) gestartet werden. Es überwacht dann Prozesse interaktiv und gibt die Logs in die Konsole und in die Log-Datei aus.
+
+```powershell
+.\ProcessMonitorService.exe
+```
+- Zum Beenden `Strg+C` verwenden.
 
 ## Hinweise
 
@@ -125,11 +148,11 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
   icacls "C:\ProgramData\ProcessMonitor" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
   ```
 
-## Log-Analyse mit PowerShell
+# Log-Analyse mit PowerShell
 
 Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komfortable Analyse der JSON-Log-Dateien.
 
-### Verwendung
+## Verwendung
 
 **Grundlegende Verwendung:**
 ```powershell
@@ -158,7 +181,7 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 .\process-JSONFiles.ps1 -ProcessName "chrome.exe" -Days 7 -Export
 ```
 
-### Parameter
+## Parameter
 
 | Parameter | Beschreibung | Standard |
 |-----------|--------------|----------|
@@ -168,7 +191,7 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 | `-Days` | Zeigt Events der letzten X Tage | 1 |
 | `-Export` | Exportiert Ergebnisse in CSV-Datei | Nein |
 
-### Ausgabeformat
+## Ausgabeformat
 
 Das Skript zeigt folgende Informationen an:
 - **Timestamp**: Datum und Uhrzeit des Events
@@ -179,7 +202,7 @@ Das Skript zeigt folgende Informationen an:
 - **ExecutablePath**: Vollständiger Pfad zur Datei
 - **CommandLine**: Verwendete Kommandozeile
 
-### Beispiel-Ausgabe
+## Beispiel-Ausgabe
 
 ```
 === ProcessMonitorService Log-Analyse ===
@@ -201,6 +224,6 @@ notepad.exe    15
 calc.exe        8
 ```
 
-## Lizenz
+# Lizenz
 
 MIT – freie Nutzung, keine Garantie.
