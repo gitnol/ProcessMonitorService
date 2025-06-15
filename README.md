@@ -38,8 +38,12 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 
 ```json
 {
-  "ProcessFilter": [ "notepad.exe", "calc.exe" ],
-  "LogDirectory": "C:\\ProgramData\\ProcessMonitor"
+  "ProcessMonitor": {
+    "ProcessFilters": [ "notepad.exe", "calc.exe" ],
+    "CacheExpiryMinutes": 30,
+    "StatusUpdateIntervalMinutes": 5,
+    "CacheCleanupIntervalMinutes": 10
+  }
 }
 ```
 - Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden.
@@ -96,10 +100,9 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
   ```powershell
   dotnet add package Microsoft.Extensions.Hosting --version 9.0.6
   dotnet add package Microsoft.Extensions.Hosting.WindowsServices
-  dotnet add package Microsoft.Management.Infrastructure
   dotnet add package Microsoft.Extensions.Diagnostics.HealthChecks
+  dotnet add package Microsoft.Management.Infrastructure
   dotnet add package System.Management
-  dotnet add package System.Management.Automation
   dotnet add package Serilog.Extensions.Hosting
   dotnet add package Serilog.Settings.Configuration
   dotnet add package Serilog.Sinks.Console
