@@ -144,8 +144,8 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
 - Optional: Zugriff auf die Daten auf `Administratoren` (und `System`) beschränken:
   ```powershell
   New-Item -Path "C:\ProgramData\ProcessMonitor" -ItemType Directory -Force
-  icacls "C:\ProgramData\ProcessMonitor" /inheritance:r
-  icacls "C:\ProgramData\ProcessMonitor" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
+  icacls "C:\ProgramData\ProcessMonitorService" /inheritance:r
+  icacls "C:\ProgramData\ProcessMonitorService" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
   ```
 
 # Log-Analyse mit PowerShell
