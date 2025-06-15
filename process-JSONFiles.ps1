@@ -83,15 +83,21 @@ function Get-ProcessEvents {
     return $allEvents
 }
 
+function Convert-ToGermanTime {
+    param($UtcTimeString)
+    if ($UtcTimeString) {
+        $sourceTime = ([DateTime]$UtcTimeString)
+        $germanTimeZone = [TimeZoneInfo]::FindSystemTimeZoneById("W. Europe Standard Time")
+        $convertedTime = [TimeZoneInfo]::ConvertTime($sourceTime, $germanTimeZone)
+        return $convertedTime.ToString("yyyy-MM-dd HH:mm:ss")
+    }
+    return "N/A"
+}
+
 function Format-ProcessEvent {
     param($myEvent)
-    
-    $timestamp = if ($myEvent.'@t') { 
-        ([DateTime]$myEvent.'@t').ToString("yyyy-MM-dd HH:mm:ss") 
-    }
-    else { 
-        "N/A" 
-    }
+
+    $timestamp = Convert-ToGermanTime -UtcTimeString $myEvent.'@t'
     
     [PSCustomObject]@{
         Timestamp      = $timestamp
