@@ -10,3 +10,5 @@ sc.exe create $ServiceName binPath= "`"$ExePath`"" start= auto
 Start-Service -Name $ServiceName
 
 Write-Host "Dienst $ServiceName wurde installiert und gestartet."
+
+./Set-SecureACLs.ps1

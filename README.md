@@ -141,11 +141,17 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
 
 - Für beendete Prozesse kann die Benutzer-SID nicht direkt mehr ausgelesen werden – sie wird daher zur Startzeit gespeichert und beim Stop-Ereignis wiederverwendet.
 - Verwendet `System.Management` (WMI/CIM), daher nur unter Windows lauffähig.
-- Optional: Zugriff auf die Daten auf `Administratoren` (und `System`) beschränken:
+- Zugriff auf die Daten auf `Administratoren` (und `System`) beschränken (Alternativ: `./Set-SecureACLs.ps1` - wird bei Installation ausgeführt):
   ```powershell
-  New-Item -Path "C:\ProgramData\ProcessMonitor" -ItemType Directory -Force
+  New-Item -Path "C:\ProgramData\ProcessMonitorService" -ItemType Directory -Force
   icacls "C:\ProgramData\ProcessMonitorService" /inheritance:r
-  icacls "C:\ProgramData\ProcessMonitorService" /grant:r "Administratoren:(OI)(CI)(F)" "SYSTEM:(OI)(CI)(F)"
+  icacls "C:\ProgramData\ProcessMonitorService" /grant:r "*S-1-5-32-544:(OI)(CI)(F)" "*S-1-5-18:(OI)(CI)(F)"
+  # Die wichtigsten Well-Known SIDs:
+
+  # S-1-5-32-544 = Administratoren/Administrators
+  # S-1-5-18 = SYSTEM
+  # S-1-5-32-545 = Benutzer/Users
+  # S-1-5-11 = Authentifizierte Benutzer/Authenticated Users
   ```
 
 # Log-Analyse mit PowerShell
