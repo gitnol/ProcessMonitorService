@@ -24,6 +24,8 @@
   <ItemGroup>
     <None Update="*.ps1">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+
 </Project>
