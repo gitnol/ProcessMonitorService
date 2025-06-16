@@ -2,6 +2,7 @@
   - [Features](#features)
   - [Beispielhafte Log-Ausgabe nach `service-<yyyyMMdd>.json`](#beispielhafte-log-ausgabe-nach-service-yyyymmddjson)
   - [Beispiel für `appsettings.json`](#beispiel-für-appsettingsjson)
+  - [Filterlogik](#filterlogik)
   - [Voraussetzungen für die Installation / Ausführung](#voraussetzungen-für-die-installation--ausführung)
   - [Installation](#installation)
     - [Kompilieren mit .NET 9](#kompilieren-mit-net-9)
@@ -24,9 +25,10 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 ## Features
 
 - Überwachung von Prozessen über `__InstanceCreationEvent` und `__InstanceDeletionEvent`.
-- Filterung nach Prozessname. Konfigurierbar über `appsettings.json`. Änderungen an dieser Datei werden automatisch erkannt und übernommen.
+- Flexible Filterung nach Prozessname mit Include- und Exclude-Filtern. Konfigurierbar über `appsettings.json`. Änderungen an dieser Datei werden automatisch erkannt und übernommen.
+- Unterstützung für Wildcards (`*` und `?`) in Filtern.
 - Tägliche JSON-Log-Dateien, standardmäßig gespeichert unter:  
-  `C:\ProgramData\ProcessMonitorService\service-<yyyyMMdd>.json`
+  `C:\ProgramData\ProcessMonitorService\logs\service-<yyyyMMdd>.json`
 - Automatische Erkennung, ob als Windows-Dienst oder interaktiv (CLI) gestartet.
 - Protokollierte Informationen:
   - Prozessname
@@ -59,16 +61,55 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 {
   "ProcessMonitor": {
     "ProcessFilters": [ "notepad.exe", "calc.exe", "chrome*", "my-p?ocess.exe" ],
-    "CacheExpiryMinutes": 30, // 1440 = Prozesse aus dem Cache entfernen, die älter als ein Tag sind
+    "ProcessExcludeFilters": ["system*", "svchost.exe", "*temp*"],
+    "CacheExpiryMinutes": 30,
     "StatusUpdateIntervalMinutes": 5,
     "CacheCleanupIntervalMinutes": 10
   }
 }
 ```
-- Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden. (es wird * und ? unterstützt)
-- `StatusUpdateIntervalMinutes`: Gibt nach wiederkehrenden `5` Minuten eine Statusmeldung aus: `Service status: Running. Cache entries: {CacheCount}, Active filters: {FilterCount}`
-- `CacheCleanupIntervalMinutes`: Nach `10` Minuten wird der Cache Aufräumvorgang gestartet. Es werden dann die Prozesse aus dem Cache entfernt, welche ein Alter von `CacheExpiryMinutes` Minuten besitzen
-- `CacheExpiryMinutes`: Prozesse, die länger laufen als `30` Minuten, werden beim Cache Aufräumvorgang nach `CacheCleanupIntervalMinutes` aus dem Cache entfernt.
+
+**Konfigurationsoptionen:**
+
+- **`ProcessFilters`**: Liste der zu überwachenden Prozesse (Include-Filter). Unterstützt Wildcards (`*` und `?`). Wenn leer oder nicht definiert, werden alle Prozesse überwacht.
+- **`ProcessExcludeFilters`**: Liste der auszuschließenden Prozesse (Exclude-Filter). Unterstützt Wildcards (`*` und `?`). Diese Filter haben Vorrang vor Include-Filtern.
+- **`CacheExpiryMinutes`**: Prozesse, die länger laufen als die angegebenen Minuten, werden beim Cache-Aufräumvorgang entfernt. (Standard: 30)
+- **`StatusUpdateIntervalMinutes`**: Intervall für Statusmeldungen in Minuten. (Standard: 5)
+- **`CacheCleanupIntervalMinutes`**: Intervall für Cache-Aufräumvorgänge in Minuten. (Standard: 10)
+
+## Filterlogik
+
+Die Filterlogik arbeitet nach folgendem Prinzip:
+
+1. **Exclude-Filter (höchste Priorität)**: Prozesse, die einem Exclude-Filter entsprechen, werden **niemals** überwacht, unabhängig von Include-Filtern.
+
+2. **Include-Filter**: 
+   - Wenn Include-Filter definiert sind: Nur Prozesse, die einem Include-Filter entsprechen, werden überwacht.
+   - Wenn keine Include-Filter definiert sind: Alle Prozesse werden überwacht (außer ausgeschlossene).
+
+3. **Wildcard-Unterstützung**:
+   - `*` = beliebig viele Zeichen (z.B. `chrome*` für alle Chrome-Prozesse)
+   - `?` = genau ein Zeichen (z.B. `my-p?ocess.exe` für `my-process.exe`)
+
+**Beispiele:**
+
+```json
+{
+  "ProcessFilters": ["notepad.exe", "chrome*"],
+  "ProcessExcludeFilters": ["*temp*", "system*"]
+}
+```
+- ✅ Überwacht: `notepad.exe`, `chrome.exe`, `chrome_proxy.exe`
+- ❌ Nicht überwacht: `notepad_temp.exe`, `system32.exe`, `calc.exe` (nicht in Include-Liste)
+
+```json
+{
+  "ProcessFilters": [],
+  "ProcessExcludeFilters": ["svchost.exe", "*temp*"]
+}
+```
+- ✅ Überwacht: Alle Prozesse außer den ausgeschlossenen
+- ❌ Nicht überwacht: `svchost.exe`, `notepad_temp.exe`, `temp_file.exe`
 
 ## Voraussetzungen für die Installation / Ausführung
 
@@ -143,18 +184,18 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
 
 - Für beendete Prozesse kann die Benutzer-SID nicht direkt mehr ausgelesen werden – sie wird daher zur Startzeit gespeichert und beim Stop-Ereignis wiederverwendet.
 - Verwendet `System.Management` (WMI/CIM), daher nur unter Windows lauffähig.
-- Zugriff auf die Daten auf `Administratoren` (und `System`) beschränken (Alternativ: `./Set-SecureACLs.ps1` - wird bei Installation ausgeführt):
+- Zugriff auf die Daten wird auf `Administratoren` (und `System`) beschränkt (Alternativ: `./Set-SecureACLs.ps1` - wird bei Installation ausgeführt):
   ```powershell
   New-Item -Path "C:\ProgramData\ProcessMonitorService" -ItemType Directory -Force
   icacls "C:\ProgramData\ProcessMonitorService" /inheritance:r
   icacls "C:\ProgramData\ProcessMonitorService" /grant:r "*S-1-5-32-544:(OI)(CI)(F)" "*S-1-5-18:(OI)(CI)(F)"
-  # Die wichtigsten Well-Known SIDs:
-
-  # S-1-5-32-544 = Administratoren/Administrators
-  # S-1-5-18 = SYSTEM
-  # S-1-5-32-545 = Benutzer/Users
-  # S-1-5-11 = Authentifizierte Benutzer/Authenticated Users
   ```
+  
+  **Wichtige Well-Known SIDs:**
+  - `S-1-5-32-544` = Administratoren/Administrators
+  - `S-1-5-18` = SYSTEM
+  - `S-1-5-32-545` = Benutzer/Users
+  - `S-1-5-11` = Authentifizierte Benutzer/Authenticated Users
 
 # Log-Analyse mit PowerShell
 
@@ -179,8 +220,8 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 # Kombinierte Filter
 .\process-JSONFiles.ps1 -ProcessName "notepad.exe" -EventType "Start" -Days 3
 
-# Kombinierte Filter mit Ausgabe und Auswahlmöglichkeit im GridView und Ausgabe wieder in der Pipeline
-.\process-JSONFiles.ps1 -ProcessName "chrome.exe" -EventType "All" -Days 3 -ForPipeline | Out-GridView -Title "Notepad Prozessereignisse der letzten drei Tage" -PassThru | % {$_}
+# Kombinierte Filter mit GridView-Ausgabe und Pipeline-Weiterverarbeitung
+.\process-JSONFiles.ps1 -ProcessName "chrome.exe" -EventType "All" -Days 3 -ForPipeline | Out-GridView -Title "Chrome Prozessereignisse der letzten drei Tage" -PassThru | ForEach-Object {$_}
 ```
 
 **Export-Funktionen:**
@@ -201,7 +242,7 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 | `-EventType` | Filter nach Event-Typ: "Start", "Stop", "All" | "All" |
 | `-Days` | Zeigt Events der letzten X Tage | 1 |
 | `-Export` | Exportiert Ergebnisse in CSV-Datei | Nein |
-| `-ForPipeline` | Ermöglicht Weiterverarbeitung der Ergebnisse über eine Pipeline | Nein |
+| `-ForPipeline` | Ermöglicht Weiterverarbeitung der Ergebnisse über Pipeline | Nein |
 
 ## Ausgabeformat
 

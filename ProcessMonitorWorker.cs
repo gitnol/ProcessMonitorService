@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 public class ProcessMonitorOptions
 {
     public List<string> ProcessFilters { get; set; } = new();
+    public List<string> ProcessExcludeFilters { get; set; } = new();
     public int CacheExpiryMinutes { get; set; } = 30;
     public int StatusUpdateIntervalMinutes { get; set; } = 5;
     public int CacheCleanupIntervalMinutes { get; set; } = 10;
@@ -111,6 +112,7 @@ public class ProcessMonitorWorker : BackgroundService
     private readonly IProcessOwnerService _processOwnerService;
 
     private HashSet<string> _processFilterSet = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _processExcludeFilterSet = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, ProcessCacheEntry> _processSidCache = new();
 
     private ManagementEventWatcher? _startWatcher;
@@ -131,14 +133,14 @@ public class ProcessMonitorWorker : BackgroundService
         _processOwnerService = processOwnerService;
         _currentOptions = _optionsMonitor.CurrentValue;
 
-        UpdateProcessFilters(_currentOptions.ProcessFilters);
+        UpdateProcessFilters(_currentOptions.ProcessFilters, _currentOptions.ProcessExcludeFilters);
 
         // Configuration change handler
         _optionsMonitor.OnChange(options =>
         {
             _logger.LogInformation("Configuration changed, reloading settings");
             _currentOptions = options;
-            UpdateProcessFilters(options.ProcessFilters);
+            UpdateProcessFilters(options.ProcessFilters, options.ProcessExcludeFilters);
         });
     }
 
@@ -147,7 +149,8 @@ public class ProcessMonitorWorker : BackgroundService
         _logger.LogInformation("=== ProcessMonitorWorker starting ===");
         _logger.LogInformation("Base directory: {BaseDirectory}", AppContext.BaseDirectory);
         _logger.LogInformation("User context: {UserName}", Environment.UserName);
-        _logger.LogInformation("Active process filters: {FilterCount}", _processFilterSet.Count);
+        _logger.LogInformation("Active process filters: {FilterCount}, exclude filters: {ExcludeFilterCount}",
+            _processFilterSet.Count, _processExcludeFilterSet.Count);
 
         return base.StartAsync(cancellationToken);
     }
@@ -213,39 +216,80 @@ public class ProcessMonitorWorker : BackgroundService
 
     private string BuildProcessFilter()
     {
-        if (!_processFilterSet.Any())
+        var includeConditions = new List<string>();
+        var excludeConditions = new List<string>();
+
+        // Include-Filter erstellen (wenn vorhanden)
+        if (_processFilterSet.Any())
         {
-            return string.Empty; // Keine Filter = alle Prozesse überwachen
+            var conditions = _processFilterSet
+                .Select(processName =>
+                {
+                    if (processName.Contains('*') || processName.Contains('?'))
+                    {
+                        var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
+                        return $"TargetInstance.Name LIKE '{wqlPattern}'";
+                    }
+                    else
+                    {
+                        return $"TargetInstance.Name = '{processName}'";
+                    }
+                });
+
+            includeConditions.Add($"({string.Join(" OR ", conditions)})");
         }
 
-        // WQL OR-Bedingungen für alle gefilterten Prozesse erstellen
-        var conditions = _processFilterSet
-            .Select(processName =>
-            {
-                // Prüfen, ob der Prozessname Wildcards (* oder ?) enthält
-                if (processName.Contains('*') || processName.Contains('?'))
+        // Exclude-Filter erstellen (wenn vorhanden)
+        if (_processExcludeFilterSet.Any())
+        {
+            var conditions = _processExcludeFilterSet
+                .Select(processName =>
                 {
-                    // WQL LIKE-Operator für Wildcard-Unterstützung verwenden
-                    // Asterisk (*) entspricht % in WQL, Fragezeichen (?) entspricht _ in WQL
-                    var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
-                    return $"TargetInstance.Name LIKE '{wqlPattern}'";
-                }
-                else
-                {
-                    // Exakte Übereinstimmung für Filter ohne Wildcards
-                    return $"TargetInstance.Name = '{processName}'";
-                }
-            })
-            .ToArray();
+                    if (processName.Contains('*') || processName.Contains('?'))
+                    {
+                        var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
+                        return $"TargetInstance.Name NOT LIKE '{wqlPattern}'";
+                    }
+                    else
+                    {
+                        return $"TargetInstance.Name != '{processName}'";
+                    }
+                });
 
-        return string.Join(" OR ", conditions);
+            excludeConditions.AddRange(conditions);
+        }
+
+        // Finale Bedingung zusammenbauen
+        var finalConditions = new List<string>();
+
+        if (includeConditions.Any())
+        {
+            finalConditions.AddRange(includeConditions);
+        }
+
+        if (excludeConditions.Any())
+        {
+            finalConditions.AddRange(excludeConditions);
+        }
+
+        // Wenn keine Filter vorhanden sind, alle Prozesse überwachen
+        if (!finalConditions.Any())
+        {
+            return string.Empty;
+        }
+
+        return string.Join(" AND ", finalConditions);
     }
 
-    private void UpdateProcessFilters(List<string> filters)
+    private void UpdateProcessFilters(List<string> filters, List<string> excludeFilters)
     {
         _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-        _logger.LogInformation("Process filters updated: {FilterCount} filters loaded", _processFilterSet.Count);
-        _logger.LogDebug("Active filters: {@ProcessFilters}", _processFilterSet.ToArray());
+        _processExcludeFilterSet = new HashSet<string>(excludeFilters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+        _logger.LogInformation("Process filters updated: {FilterCount} include filters, {ExcludeFilterCount} exclude filters loaded",
+            _processFilterSet.Count, _processExcludeFilterSet.Count);
+        _logger.LogDebug("Active include filters: {@ProcessFilters}", _processFilterSet.ToArray());
+        _logger.LogDebug("Active exclude filters: {@ProcessExcludeFilters}", _processExcludeFilterSet.ToArray());
 
         // WMI-Watcher neu initialisieren, wenn sie bereits laufen
         if (_startWatcher != null || _stopWatcher != null)
@@ -319,7 +363,7 @@ public class ProcessMonitorWorker : BackgroundService
             var name = process["Name"]?.ToString() ?? "N/A";
 
             // Filter check - early return if not monitored
-            if (_processFilterSet.Any() && !_processFilterSet.Contains(name))
+            if (!ShouldMonitorProcess(name))
             {
                 return;
             }
@@ -346,6 +390,71 @@ public class ProcessMonitorWorker : BackgroundService
         {
             _logger.LogError(ex, "Error handling process event: {EventType}", eventType);
         }
+    }
+
+    private bool ShouldMonitorProcess(string processName)
+    {
+        // Zuerst prüfen, ob der Prozess explizit ausgeschlossen werden soll
+        if (_processExcludeFilterSet.Any())
+        {
+            foreach (var excludeFilter in _processExcludeFilterSet)
+            {
+                if (excludeFilter.Contains('*') || excludeFilter.Contains('?'))
+                {
+                    // Wildcard-Matching für Exclude-Filter
+                    var pattern = "^" + System.Text.RegularExpressions.Regex.Escape(excludeFilter)
+                        .Replace("\\*", ".*")
+                        .Replace("\\?", ".") + "$";
+
+                    if (System.Text.RegularExpressions.Regex.IsMatch(processName, pattern,
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    {
+                        return false; // Prozess ist ausgeschlossen
+                    }
+                }
+                else
+                {
+                    // Exakte Übereinstimmung für Exclude-Filter
+                    if (string.Equals(processName, excludeFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return false; // Prozess ist ausgeschlossen
+                    }
+                }
+            }
+        }
+
+        // Dann prüfen, ob Include-Filter definiert sind
+        if (_processFilterSet.Any())
+        {
+            foreach (var includeFilter in _processFilterSet)
+            {
+                if (includeFilter.Contains('*') || includeFilter.Contains('?'))
+                {
+                    // Wildcard-Matching für Include-Filter
+                    var pattern = "^" + System.Text.RegularExpressions.Regex.Escape(includeFilter)
+                        .Replace("\\*", ".*")
+                        .Replace("\\?", ".") + "$";
+
+                    if (System.Text.RegularExpressions.Regex.IsMatch(processName, pattern,
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    {
+                        return true; // Prozess ist eingeschlossen
+                    }
+                }
+                else
+                {
+                    // Exakte Übereinstimmung für Include-Filter
+                    if (string.Equals(processName, includeFilter, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true; // Prozess ist eingeschlossen
+                    }
+                }
+            }
+            return false; // Kein Include-Filter matched
+        }
+
+        // Keine Include-Filter definiert = alle Prozesse überwachen (außer ausgeschlossene)
+        return true;
     }
 
     private void LogProcessEvent(string eventType, string name, int pid, string sid, ManagementBaseObject process)
@@ -398,8 +507,8 @@ public class ProcessMonitorWorker : BackgroundService
     {
         try
         {
-            _logger.LogInformation("Service status: Running. Cache entries: {CacheCount}, Active filters: {FilterCount}",
-                _processSidCache.Count, _processFilterSet.Count);
+            _logger.LogInformation("Service status: Running. Cache entries: {CacheCount}, Include filters: {FilterCount}, Exclude filters: {ExcludeFilterCount}",
+                _processSidCache.Count, _processFilterSet.Count, _processExcludeFilterSet.Count);
         }
         catch (Exception ex)
         {
