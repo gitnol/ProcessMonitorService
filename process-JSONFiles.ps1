@@ -26,6 +26,9 @@
 .PARAMETER ForPipeline
     Ermöglicht Weiterverarbeitung der Ergebnisse über eine Pipeline
 
+.PARAMETER OnlyProcessRuntimes
+    Zeigt nur Start- und Stop-Zeiten von Prozessen an, berechnet die Laufzeit
+
 .EXAMPLE
     .\process-JSONFiles.ps1
     Zeigt alle Events des aktuellen Tages
@@ -46,7 +49,8 @@ param(
     [string]$EventType = "All",
     [int]$Days = 1,
     [switch]$Export,
-    [switch]$ForPipeline
+    [switch]$ForPipeline,
+    [switch]$OnlyProcessRuntimes
 )
 
 function Write-ColorOutput {
@@ -172,6 +176,31 @@ try {
         elseif ($ForPipeline) {
             $formattedEvents
         }
+        elseif ($OnlyProcessRuntimes) {
+            ($formattedEvents | Sort-object -Property TimeStamp |  Group-Object -Property ProcessId, ProcessName | Where-Object Count -ge 2).Group | ForEach-Object {
+                if ($_.EventType -eq "Start") {
+                    $Start = [DateTime]$_.TimeStamp
+                }
+                elseif ($_.EventType -eq "Stop") {
+                    $Ende = [DateTime]$_.TimeStamp; 
+                    if (($Start -ge $Ende) -or ($Start -eq $null)) {
+                        Write-Error("Ende des Prozesses vor Start oder Start des Prozesses wurde nicht gefunden. Das kann nicht sein. Überspringe Eintrag"); 
+                        $Ende = $null 
+                    } 
+                }; 
+                if ($Start -and $Ende) { 
+                    [PSCustomObject]@{
+                        Prozess          = $_.ProcessName
+                        ProcessId        = $_.ProcessId
+                        Start            = $Start
+                        Ende             = $Ende
+                        RuntimeInSeconds = ($Ende - $Start).TotalSeconds
+                    }
+                    $Start = $null 
+                    $Ende = $null
+                } 
+            }
+        }
         else {
             Write-ColorOutput "`n📋 Gefilterte Events:" -Color "Cyan"
             $formattedEvents | Format-Table -AutoSize
@@ -189,3 +218,5 @@ catch {
 }
 
 Write-ColorOutput "`n✅ Analyse abgeschlossen" -Color "Green"
+
+

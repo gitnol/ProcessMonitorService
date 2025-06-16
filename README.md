@@ -231,6 +231,9 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 
 # Gefilterte Events exportieren
 .\process-JSONFiles.ps1 -ProcessName "chrome.exe" -Days 7 -Export
+
+# Zeigt nur Start- und Stop-Zeiten von Prozessen an, berechnet die Laufzeit
+.\process-JSONFiles.ps1 -OnlyProcessRuntimes
 ```
 
 ## Parameter
@@ -243,6 +246,7 @@ Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komf
 | `-Days` | Zeigt Events der letzten X Tage | 1 |
 | `-Export` | Exportiert Ergebnisse in CSV-Datei | Nein |
 | `-ForPipeline` | Ermöglicht Weiterverarbeitung der Ergebnisse über Pipeline | Nein |
+| `-OnlyProcessRuntimes` | Zeigt nur Start- und Stop-Zeiten von Prozessen an, berechnet die Laufzeit | Nein |
 
 ## Ausgabeformat
 
