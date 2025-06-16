@@ -58,14 +58,14 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 ```json
 {
   "ProcessMonitor": {
-    "ProcessFilters": [ "notepad.exe", "calc.exe" ],
+    "ProcessFilters": [ "notepad.exe", "calc.exe", "chrome*", "my-p?ocess.exe" ],
     "CacheExpiryMinutes": 30, // 1440 = Prozesse aus dem Cache entfernen, die älter als ein Tag sind
     "StatusUpdateIntervalMinutes": 5,
     "CacheCleanupIntervalMinutes": 10
   }
 }
 ```
-- Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden.
+- Die Liste `ProcessFilter` bestimmt, welche Prozesse überwacht werden. (es wird * und ? unterstützt)
 - `StatusUpdateIntervalMinutes`: Gibt nach wiederkehrenden `5` Minuten eine Statusmeldung aus: `Service status: Running. Cache entries: {CacheCount}, Active filters: {FilterCount}`
 - `CacheCleanupIntervalMinutes`: Nach `10` Minuten wird der Cache Aufräumvorgang gestartet. Es werden dann die Prozesse aus dem Cache entfernt, welche ein Alter von `CacheExpiryMinutes` Minuten besitzen
 - `CacheExpiryMinutes`: Prozesse, die länger laufen als `30` Minuten, werden beim Cache Aufräumvorgang nach `CacheCleanupIntervalMinutes` aus dem Cache entfernt.
@@ -84,7 +84,7 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
 
 **Voraussetzungen**
 
-- .NET 9 SDK
+- .NET 9 SDK mit `winget install Microsoft.DotNet.SDK.9`
 - Pakete:
   ```powershell
   dotnet add package Microsoft.Extensions.Hosting --version 9.0.6

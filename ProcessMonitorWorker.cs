@@ -220,7 +220,22 @@ public class ProcessMonitorWorker : BackgroundService
 
         // WQL OR-Bedingungen für alle gefilterten Prozesse erstellen
         var conditions = _processFilterSet
-            .Select(processName => $"TargetInstance.Name = '{processName}'")
+            .Select(processName =>
+            {
+                // Prüfen, ob der Prozessname Wildcards (* oder ?) enthält
+                if (processName.Contains('*') || processName.Contains('?'))
+                {
+                    // WQL LIKE-Operator für Wildcard-Unterstützung verwenden
+                    // Asterisk (*) entspricht % in WQL, Fragezeichen (?) entspricht _ in WQL
+                    var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
+                    return $"TargetInstance.Name LIKE '{wqlPattern}'";
+                }
+                else
+                {
+                    // Exakte Übereinstimmung für Filter ohne Wildcards
+                    return $"TargetInstance.Name = '{processName}'";
+                }
+            })
             .ToArray();
 
         return string.Join(" OR ", conditions);
