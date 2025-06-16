@@ -115,6 +115,8 @@ public class ProcessMonitorWorker : BackgroundService
     private HashSet<string> _processExcludeFilterSet = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, ProcessCacheEntry> _processSidCache = new();
 
+    private string _lastFilterSnapshot = "";
+
     private ManagementEventWatcher? _startWatcher;
     private ManagementEventWatcher? _stopWatcher;
     private Timer? _cacheCleanupTimer;
@@ -283,6 +285,12 @@ public class ProcessMonitorWorker : BackgroundService
 
     private void UpdateProcessFilters(List<string> filters, List<string> excludeFilters)
     {
+        string snapshot = string.Join(",", filters) + "|" + string.Join(",", excludeFilters);
+        if (snapshot == _lastFilterSnapshot)
+            return;
+
+        _lastFilterSnapshot = snapshot;
+
         _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         _processExcludeFilterSet = new HashSet<string>(excludeFilters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
 
