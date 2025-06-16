@@ -248,11 +248,11 @@ public class ProcessMonitorWorker : BackgroundService
                     if (processName.Contains('*') || processName.Contains('?'))
                     {
                         var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
-                        return $"TargetInstance.Name NOT LIKE '{wqlPattern}'";
+                        return $"NOT TargetInstance.Name LIKE '{wqlPattern}'";
                     }
                     else
                     {
-                        return $"TargetInstance.Name != '{processName}'";
+                        return $"NOT TargetInstance.Name = '{processName}'";
                     }
                 });
 
