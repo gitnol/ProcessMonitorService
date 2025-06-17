@@ -379,6 +379,39 @@ public class ProcessMonitorWorker : BackgroundService
             var pid = Convert.ToInt32(process["ProcessId"]);
             var sid = "UNKNOWN";
 
+            // NEU: ParentProcessId und ParentName ermitteln
+            uint parentPid = 0;
+            string parentName = "N/A";
+            try
+            {
+                parentPid = Convert.ToUInt32(process["ParentProcessId"]);
+                // Suchen Sie den Namen des Elternprozesses, wenn eine gültige PID vorhanden ist
+                if (parentPid > 0)
+                {
+                    // Eine separate Abfrage ist erforderlich, um den Namen des Elternprozesses zu erhalten
+                    var query = new SelectQuery("Win32_Process", $"ProcessId = {parentPid}");
+                    using (var searcher = new ManagementObjectSearcher(query))
+                    {
+                        using (var results = searcher.Get())
+                        {
+                            // Nehmen Sie das erste Ergebnis, da PIDs eindeutig sind
+                            var parentProcess = results.Cast<ManagementObject>().FirstOrDefault();
+                            if (parentProcess != null)
+                            {
+                                parentName = parentProcess["Name"]?.ToString() ?? "N/A";
+                                parentProcess.Dispose(); // Ressourcen freigeben
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not retrieve parent process information for PID {ProcessId}", pid);
+                parentName = "ERROR";
+            }
+
+
             if (eventType == "Start")
             {
                 sid = await _processOwnerService.GetProcessOwnerSidAsync(pid);
@@ -392,7 +425,8 @@ public class ProcessMonitorWorker : BackgroundService
                 }
             }
 
-            LogProcessEvent(eventType, name, pid, sid, process);
+            // Rufen Sie die aktualisierte Logging-Methode mit den neuen Parametern auf
+            LogProcessEvent(eventType, name, pid, sid, Convert.ToInt32(parentPid), parentName, process);
         }
         catch (Exception ex)
         {
@@ -465,14 +499,16 @@ public class ProcessMonitorWorker : BackgroundService
         return true;
     }
 
-    private void LogProcessEvent(string eventType, string name, int pid, string sid, ManagementBaseObject process)
+    private void LogProcessEvent(string eventType, string name, int pid, string sid, int parentPid, string parentName, ManagementBaseObject process)
     {
         _logger.LogInformation(
-            "Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Path: {ExecutablePath} Command: {CommandLine}",
+            "Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Parent: {ParentName} (PID: {ParentProcessId}) Path: {ExecutablePath} Command: {CommandLine}",
             eventType,
             name,
             pid,
             sid,
+            parentName,
+            parentPid,
             process["ExecutablePath"]?.ToString() ?? "N/A",
             process["CommandLine"]?.ToString() ?? "N/A"
         );
