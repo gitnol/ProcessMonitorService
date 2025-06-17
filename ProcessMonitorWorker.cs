@@ -24,6 +24,7 @@ public class ProcessMonitorOptions
 public interface IProcessOwnerService
 {
     Task<string> GetProcessOwnerSidAsync(int processId);
+    Task<string> GetProcessNameByIdAsync(uint processId);
 }
 
 public class ProcessOwnerService : IProcessOwnerService, IDisposable
@@ -72,6 +73,25 @@ public class ProcessOwnerService : IProcessOwnerService, IDisposable
         }
     }
 
+    public async Task<string> GetProcessNameByIdAsync(uint processId)
+    {
+        if (processId == 0) return "N/A";
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                var query = $"SELECT Name FROM Win32_Process WHERE ProcessId = {processId}";
+                var result = _cimSession.Value.QueryInstances(@"root\cimv2", "WQL", query).FirstOrDefault();
+                return result?.CimInstanceProperties["Name"]?.Value?.ToString() ?? "N/A";
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CIM query for process name failed for PID {ProcessId}", processId);
+            return "ERROR_GETTING_PROCESS_NAME";
+        }
+    }
 
     public void Dispose()
     {
@@ -114,7 +134,7 @@ public class ProcessMonitorWorker : BackgroundService
     private HashSet<string> _processFilterSet = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _processExcludeFilterSet = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, ProcessCacheEntry> _processSidCache = new();
-
+    private readonly object _filterUpdateLock = new object();
     private string _lastFilterSnapshot = "";
 
     private ManagementEventWatcher? _startWatcher;
@@ -140,9 +160,8 @@ public class ProcessMonitorWorker : BackgroundService
         // Configuration change handler
         _optionsMonitor.OnChange(options =>
         {
-            _logger.LogInformation("Configuration changed, reloading settings");
             _currentOptions = options;
-            UpdateProcessFilters(options.ProcessFilters, options.ProcessExcludeFilters);
+            UpdateProcessFilters(_currentOptions.ProcessFilters, _currentOptions.ProcessExcludeFilters);
         });
     }
 
@@ -285,25 +304,36 @@ public class ProcessMonitorWorker : BackgroundService
 
     private void UpdateProcessFilters(List<string> filters, List<string> excludeFilters)
     {
-        string snapshot = string.Join(",", filters) + "|" + string.Join(",", excludeFilters);
-        if (snapshot == _lastFilterSnapshot)
-            return;
-
-        _lastFilterSnapshot = snapshot;
-
-        _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-        _processExcludeFilterSet = new HashSet<string>(excludeFilters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-
-        _logger.LogInformation("Process filters updated: {FilterCount} include filters, {ExcludeFilterCount} exclude filters loaded",
-            _processFilterSet.Count, _processExcludeFilterSet.Count);
-        _logger.LogDebug("Active include filters: {@ProcessFilters}", _processFilterSet.ToArray());
-        _logger.LogDebug("Active exclude filters: {@ProcessExcludeFilters}", _processExcludeFilterSet.ToArray());
-
-        // WMI-Watcher neu initialisieren, wenn sie bereits laufen
-        if (_startWatcher != null || _stopWatcher != null)
+        _logger.LogDebug("Entering UpdateProcessFilters.");
+        lock (_filterUpdateLock)
         {
-            _logger.LogInformation("Reinitializing WMI watchers due to filter change");
-            RestartWatchers();
+            string snapshot = string.Join(",", filters) + "|" + string.Join(",", excludeFilters);
+            _logger.LogDebug("snapshot            {snapshot}", snapshot);
+            _logger.LogDebug("_lastFilterSnapshot {_lastFilterSnapshot}", _lastFilterSnapshot);
+            if (snapshot == _lastFilterSnapshot)
+            {
+                _logger.LogDebug("Configuration snapshot identical, skipping update. Last snapshot: {LastSnapshot}", _lastFilterSnapshot);
+                return;
+            }
+
+            _logger.LogInformation("Configuration changed, reloading settings");
+
+            _lastFilterSnapshot = snapshot;
+
+            _processFilterSet = new HashSet<string>(filters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            _processExcludeFilterSet = new HashSet<string>(excludeFilters ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+            _logger.LogInformation("Process filters updated: {FilterCount} include filters, {ExcludeFilterCount} exclude filters loaded",
+                _processFilterSet.Count, _processExcludeFilterSet.Count);
+            _logger.LogDebug("Active include filters: {@ProcessFilters}", _processFilterSet.ToArray());
+            _logger.LogDebug("Active exclude filters: {@ProcessExcludeFilters}", _processExcludeFilterSet.ToArray());
+
+            // WMI-Watcher neu initialisieren, wenn sie bereits laufen
+            if (_startWatcher != null || _stopWatcher != null)
+            {
+                _logger.LogInformation("Reinitializing WMI watchers due to filter change");
+                RestartWatchers();
+            }
         }
     }
 
@@ -379,37 +409,37 @@ public class ProcessMonitorWorker : BackgroundService
             var pid = Convert.ToInt32(process["ProcessId"]);
             var sid = "UNKNOWN";
 
-            // NEU: ParentProcessId und ParentName ermitteln
-            uint parentPid = 0;
-            string parentName = "N/A";
-            try
-            {
-                parentPid = Convert.ToUInt32(process["ParentProcessId"]);
-                // Suchen Sie den Namen des Elternprozesses, wenn eine gültige PID vorhanden ist
-                if (parentPid > 0)
-                {
-                    // Eine separate Abfrage ist erforderlich, um den Namen des Elternprozesses zu erhalten
-                    var query = new SelectQuery("Win32_Process", $"ProcessId = {parentPid}");
-                    using (var searcher = new ManagementObjectSearcher(query))
-                    {
-                        using (var results = searcher.Get())
-                        {
-                            // Nehmen Sie das erste Ergebnis, da PIDs eindeutig sind
-                            var parentProcess = results.Cast<ManagementObject>().FirstOrDefault();
-                            if (parentProcess != null)
-                            {
-                                parentName = parentProcess["Name"]?.ToString() ?? "N/A";
-                                parentProcess.Dispose(); // Ressourcen freigeben
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not retrieve parent process information for PID {ProcessId}", pid);
-                parentName = "ERROR";
-            }
+            uint parentPid = Convert.ToUInt32(process["ParentProcessId"]);
+            string parentName = await _processOwnerService.GetProcessNameByIdAsync(parentPid);
+
+            // try
+            // {
+            //     parentPid = Convert.ToUInt32(process["ParentProcessId"]);
+            //     // Suchen Sie den Namen des Elternprozesses, wenn eine gültige PID vorhanden ist
+            //     if (parentPid > 0)
+            //     {
+            //         // Eine separate Abfrage ist erforderlich, um den Namen des Elternprozesses zu erhalten
+            //         var query = new SelectQuery("Win32_Process", $"ProcessId = {parentPid}");
+            //         using (var searcher = new ManagementObjectSearcher(query))
+            //         {
+            //             using (var results = searcher.Get())
+            //             {
+            //                 // Nehmen Sie das erste Ergebnis, da PIDs eindeutig sind
+            //                 var parentProcess = results.Cast<ManagementObject>().FirstOrDefault();
+            //                 if (parentProcess != null)
+            //                 {
+            //                     parentName = parentProcess["Name"]?.ToString() ?? "N/A";
+            //                     parentProcess.Dispose(); // Ressourcen freigeben
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+            // catch (Exception ex)
+            // {
+            //     _logger.LogWarning(ex, "Could not retrieve parent process information for PID {ProcessId}", pid);
+            //     parentName = "ERROR";
+            // }
 
 
             if (eventType == "Start")
