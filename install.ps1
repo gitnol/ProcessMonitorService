@@ -3,6 +3,12 @@ param (
     [string]$ServiceName = "ProcessMonitorService"
 )
 
+if (-not ($PSVersionTable.PSVersion.Major -ge 7)) {
+    Write-Error "Dieses Skript erfordert PowerShell Version 7 oder höher."
+    exit 1
+}
+
+
 # Funktion zur Überprüfung der Administrator-Rechte
 function Test-IsAdministrator {
     try {

@@ -1,4 +1,9 @@
 # Funktion zur Überprüfung der Administrator-Rechte
+
+if (-not ($PSVersionTable.PSVersion.Major -ge 7)) {
+    Write-Error "Dieses Skript erfordert PowerShell Version 7 oder höher."
+    exit 1
+}
 function Test-IsAdministrator {
     try {
         $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
