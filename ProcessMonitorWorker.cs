@@ -412,36 +412,6 @@ public class ProcessMonitorWorker : BackgroundService
             uint parentPid = Convert.ToUInt32(process["ParentProcessId"]);
             string parentName = await _processOwnerService.GetProcessNameByIdAsync(parentPid);
 
-            // try
-            // {
-            //     parentPid = Convert.ToUInt32(process["ParentProcessId"]);
-            //     // Suchen Sie den Namen des Elternprozesses, wenn eine gültige PID vorhanden ist
-            //     if (parentPid > 0)
-            //     {
-            //         // Eine separate Abfrage ist erforderlich, um den Namen des Elternprozesses zu erhalten
-            //         var query = new SelectQuery("Win32_Process", $"ProcessId = {parentPid}");
-            //         using (var searcher = new ManagementObjectSearcher(query))
-            //         {
-            //             using (var results = searcher.Get())
-            //             {
-            //                 // Nehmen Sie das erste Ergebnis, da PIDs eindeutig sind
-            //                 var parentProcess = results.Cast<ManagementObject>().FirstOrDefault();
-            //                 if (parentProcess != null)
-            //                 {
-            //                     parentName = parentProcess["Name"]?.ToString() ?? "N/A";
-            //                     parentProcess.Dispose(); // Ressourcen freigeben
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-            // catch (Exception ex)
-            // {
-            //     _logger.LogWarning(ex, "Could not retrieve parent process information for PID {ProcessId}", pid);
-            //     parentName = "ERROR";
-            // }
-
-
             if (eventType == "Start")
             {
                 sid = await _processOwnerService.GetProcessOwnerSidAsync(pid);
