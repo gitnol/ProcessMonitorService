@@ -53,6 +53,19 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
   "CommandLine": "\"C:\\Windows\\System32\\notepad.exe\"",
   "Timestamp": "2025-06-14T14:12:09.2452257Z"
 }
+...
+"Serilog": {
+    "Using": [ "Serilog.Sinks.Console", "Serilog.Sinks.File" ],
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "System": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "ProcessMonitorWorker": "Information" // <-- Ändere das zu Debug, wenn du mehr Output sehen möchtest
+      }
+    }
+...
 ```
 
 ## Beispiel für `appsettings.json`
