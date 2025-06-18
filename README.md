@@ -38,34 +38,27 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
   - Benutzer-SID
   - Eventtyp (Start/Stop)
   - Zeitstempel
+  - Prozessname des aufrufenden Prozesses (ParentName)
+  - Prozess-ID des aufrufenden Prozesses (ParentProcessId)
 
 ## Beispielhafte Log-Ausgabe nach `service-<yyyyMMdd>.json`
 
 ```json
 {
-  "@t": "2025-06-14T14:12:09.2452257Z",
-  "@mt": "Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Path: {ExecutablePath} Command: {CommandLine}",
-  "EventType": "Start",
-  "ProcessName": "notepad.exe",
-  "ProcessId": 1234,
-  "UserSid": "S-1-5-21-1234567890-123456789-1234567890-1001",
-  "ExecutablePath": "C:\\Windows\\System32\\notepad.exe",
-  "CommandLine": "\"C:\\Windows\\System32\\notepad.exe\"",
-  "Timestamp": "2025-06-14T14:12:09.2452257Z"
+    "@t": "2025-06-18T08:49:26.0121288Z",
+    "@mt": "Process {EventType}: {ProcessName} (PID: {ProcessId}) User: {UserSid} Parent: {ParentName} (PID: {ParentProcessId}) Path: {ExecutablePath} Command: {CommandLine}",
+    "EventType": "Start",
+    "ProcessName": "firefox.exe",
+    "ProcessId": 1234,
+    "UserSid": "S-1-5-21-1234567890-123456789-1234567890-1001",
+    "ParentName": "firefox.exe",
+    "ParentProcessId": 5678,
+    "ExecutablePath": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+    "CommandLine": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\"",
+    "SourceContext": "ProcessMonitorWorker",
+    "MachineName": "MYPCNAME",
+    "ThreadId": 1
 }
-...
-"Serilog": {
-    "Using": [ "Serilog.Sinks.Console", "Serilog.Sinks.File" ],
-    "MinimumLevel": {
-      "Default": "Information",
-      "Override": {
-        "Microsoft": "Warning",
-        "System": "Warning",
-        "Microsoft.Hosting.Lifetime": "Information",
-        "ProcessMonitorWorker": "Information" // <-- Ändere das zu Debug, wenn du mehr Output sehen möchtest
-      }
-    }
-...
 ```
 
 ## Beispiel für `appsettings.json`
@@ -80,6 +73,20 @@ Ein Windows-Dienst und CLI-Tool zur Überwachung von Prozessen über WMI (CIM) E
     "CacheCleanupIntervalMinutes": 10
   }
 }
+```
+
+```json
+"Serilog": {
+    "Using": [ "Serilog.Sinks.Console", "Serilog.Sinks.File" ],
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "System": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information",
+        "ProcessMonitorWorker": "Information" // <-- Ändere das zu Debug, wenn du mehr Output sehen möchtest
+      }
+    }
 ```
 
 **Konfigurationsoptionen:**
