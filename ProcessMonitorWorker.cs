@@ -234,7 +234,14 @@ public class ProcessMonitorWorker : BackgroundService
             }
         }, cancellationToken);
     }
+    private string EscapeWqlString(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
 
+        // Ersetze Apostrophe durch doppelte Apostrophe und escape zusätzlich auch Backslashes
+        return input.Replace("'", "''").Replace("\\", "\\\\");
+    }
     private string BuildProcessFilter()
     {
         var includeConditions = new List<string>();
@@ -249,11 +256,11 @@ public class ProcessMonitorWorker : BackgroundService
                     if (processName.Contains('*') || processName.Contains('?'))
                     {
                         var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
-                        return $"TargetInstance.Name LIKE '{wqlPattern}'";
+                        return $"TargetInstance.Name LIKE '{EscapeWqlString(wqlPattern)}'";
                     }
                     else
                     {
-                        return $"TargetInstance.Name = '{processName}'";
+                        return $"TargetInstance.Name = '{EscapeWqlString(processName)}'";
                     }
                 });
 
@@ -269,11 +276,11 @@ public class ProcessMonitorWorker : BackgroundService
                     if (processName.Contains('*') || processName.Contains('?'))
                     {
                         var wqlPattern = processName.Replace("*", "%").Replace("?", "_");
-                        return $"NOT TargetInstance.Name LIKE '{wqlPattern}'";
+                        return $"NOT TargetInstance.Name LIKE '{EscapeWqlString(wqlPattern)}'";
                     }
                     else
                     {
-                        return $"NOT TargetInstance.Name = '{processName}'";
+                        return $"NOT TargetInstance.Name = '{EscapeWqlString(processName)}'";
                     }
                 });
 
