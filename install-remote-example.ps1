@@ -38,7 +38,6 @@ param(
 )
 
 # Konstanten
-$TIMEOUT_SECONDS = 300
 $MAX_RETRIES = 3
 
 # Funktionen
@@ -130,7 +129,7 @@ function Copy-FilesWithValidation {
     )
     
     Write-LogMessage "Kopiere Dateien mit Robocopy..."
-    $result = & robocopy @robocopyArgs
+    & robocopy @robocopyArgs
     
     # Robocopy Exit Codes: 0-7 sind erfolgreich, >7 sind Fehler
     if ($LASTEXITCODE -gt 7) {
