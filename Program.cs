@@ -5,11 +5,24 @@ using Serilog;
 using System;
 using System.IO;
 using System.Threading;
+using System.Security.Principal;
+using System.IO;
+using System.Security.AccessControl;
 
 namespace ProcessMonitorService
 {
     class Program
     {
+        private static bool IsAdministrator()
+        {
+            using (var identity = WindowsIdentity.GetCurrent())
+            {
+                var principal = new WindowsPrincipal(identity);
+                // Prüft, ob der Benutzer in der Rolle "Administrator" ist.
+                // Der "System"-Benutzer hat ebenfalls administrative Rechte und wird hier korrekt erfasst.
+                return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            }
+        }
         static async Task Main(string[] args)
         {
             // Serilog Bootstrap-Logger für den Startvorgang
@@ -29,6 +42,17 @@ namespace ProcessMonitorService
             try
             {
                 Log.Information("=== Process Monitor Service starting ===");
+
+                if (!IsAdministrator())
+                {
+                    Log.Fatal("Application must be run with administrative privileges (or as System user). Exiting.");
+                    // Optional: Eine Fehlermeldung auf die Konsole schreiben, falls es kein Dienst ist
+                    if (Environment.UserInteractive)
+                    {
+                        Console.WriteLine("Error: This application requires administrative privileges to run. Please run as administrator.");
+                    }
+                    return; // Beendet die Anwendung, wenn keine Admin-Rechte vorliegen
+                }
 
                 await Host.CreateDefaultBuilder(args)
                     .UseWindowsService()

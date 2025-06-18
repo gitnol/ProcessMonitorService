@@ -58,7 +58,6 @@ if (-not (Test-IsAdministrator)) {
     }
     
     Write-Host "Installation abgebrochen." -ForegroundColor Red
-    Read-Host "Drücke Enter zum Beenden"
     exit 1
 }
 
