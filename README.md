@@ -16,6 +16,7 @@
   - [Parameter](#parameter)
   - [Ausgabeformat](#ausgabeformat)
   - [Beispiel-Ausgabe](#beispiel-ausgabe)
+- [Beispiel: Remote Mass Deployment (nicht optimiert)](#beispiel-remote-mass-deployment-nicht-optimiert)
 - [Lizenz](#lizenz)
 
 # ProcessMonitorService
@@ -299,6 +300,19 @@ Name        Count
 chrome.exe     28
 notepad.exe    15
 calc.exe        8
+```
+
+# Beispiel: Remote Mass Deployment (nicht optimiert)
+```powershell
+$mycredentials = (Get-Credential);
+$myhosts = @(
+  "MYHOSTNAME1",
+  "MYHOSTNAME2"
+  )
+
+$myhosts | % {
+  .\Deploy-ProcessMonitorService.ps1 -TargetHost $_ -Credential $mycredentials
+}
 ```
 
 # Lizenz
