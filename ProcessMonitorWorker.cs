@@ -18,6 +18,7 @@ public class ProcessMonitorOptions
     public int CacheExpiryMinutes { get; set; } = 30;
     public int StatusUpdateIntervalMinutes { get; set; } = 5;
     public int CacheCleanupIntervalMinutes { get; set; } = 10;
+    public int MaxCacheSize { get; set; } = 10000;
 }
 
 // Services
@@ -422,6 +423,22 @@ public class ProcessMonitorWorker : BackgroundService
             if (eventType == "Start")
             {
                 sid = await _processOwnerService.GetProcessOwnerSidAsync(pid);
+
+                // Erzwinge die Cache-Kapazitätsgrenze
+                if (_processSidCache.Count >= _currentOptions.MaxCacheSize && !_processSidCache.ContainsKey(pid))
+                {
+                    // Finde und entferne den ältesten Eintrag, um Platz zu schaffen
+                    var oldestEntry = _processSidCache.OrderBy(kvp => kvp.Value.LastAccess).FirstOrDefault();
+                    if (oldestEntry.Key != default)
+                    {
+                        if (_processSidCache.TryRemove(oldestEntry.Key, out _))
+                        {
+                            _logger.LogWarning("Cache-Kapazität von {MaxCacheSize} erreicht. Ältester Eintrag (PID: {EvictedPid}) wird entfernt, um Platz für neuen Prozess (PID: {NewPid}) zu machen.",
+                                _currentOptions.MaxCacheSize, oldestEntry.Key, pid);
+                        }
+                    }
+                }
+
                 _processSidCache[pid] = new ProcessCacheEntry { Sid = sid };
             }
             else if (eventType == "Stop")
@@ -558,8 +575,8 @@ public class ProcessMonitorWorker : BackgroundService
     {
         try
         {
-            _logger.LogInformation("Service status: Running. Cache entries: {CacheCount}, Include filters: {FilterCount}, Exclude filters: {ExcludeFilterCount}",
-                _processSidCache.Count, _processFilterSet.Count, _processExcludeFilterSet.Count);
+            _logger.LogInformation("Service status: Running. Cache entries: {CacheCount}/{MaxCacheSize}, Include filters: {FilterCount}, Exclude filters: {ExcludeFilterCount}",
+                _processSidCache.Count, _currentOptions.MaxCacheSize, _processFilterSet.Count, _processExcludeFilterSet.Count);
         }
         catch (Exception ex)
         {
