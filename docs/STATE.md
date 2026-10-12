@@ -26,7 +26,7 @@ Zeitkritisch danach: I3 (.NET-10-Migration) — .NET 9 erhält nach dem 2026-11-
 
 | # | Titel | Datum | Commit |
 |---|-------|-------|--------|
-| I1 | docs_template-Baseline eingeführt (Bestand: Code ohne `docs/`) | 2026-10-11 | — (Nachtrag per `docs: record I1 commit hash`) |
+| I1 | docs_template-Baseline eingeführt (Bestand: Code ohne `docs/`) | 2026-10-11 | 666ff08 |
 
 ---
 
