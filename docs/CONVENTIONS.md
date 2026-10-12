@@ -29,7 +29,7 @@ Commit-Pflicht pro Inkrement: `docs/KICKOFF.md` Phase 3b. Stack-spezifisch nur:
 
 Verbindlich (eine `.editorconfig` mit diesen Regeln fehlt noch → `docs/BACKLOG.md`):
 
-- **Naming:** `PascalCase` für Typen, Methoden, Properties, Events. Interfaces mit `I`-Präfix. Private Felder `_camelCase`.
+- **Naming:** `PascalCase` für Typen, Methoden, Properties, Events. Interfaces mit `I`-Präfix. Private Felder `_camelCase` (Microsoft-Konvention).
 - **`var`:** Verwenden, wenn der Typ aus dem Ausdruck offensichtlich ist; explizite Typen für Builtins (`int`, `string`) und wo der Typ nicht offensichtlich ist.
 - **Expression-bodied members:** Ja für Properties, Accessors, Indexer, Lambdas. Nein für Konstruktoren, Methoden, Operatoren — dort Block-Bodies.
 - **Namespaces:** File-scoped (`namespace ProcessMonitorService;`), nicht block-scoped und nicht global (Bestand: `ProcessMonitorWorker.cs` ohne Namespace).
