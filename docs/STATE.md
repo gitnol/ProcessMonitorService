@@ -1,7 +1,7 @@
 # Aktueller Projektstatus – ProcessMonitorService
 
-Zuletzt aktualisiert: 2026-10-11
-**Initialisiert mit:** docs_template v27@5ce0f84
+Zuletzt aktualisiert: 2026-10-12
+**Initialisiert mit:** docs_template v27@5ce0f84 → v27@2268889
 **Stack / Overlays:** csharp-console / keine
 **Letztes abgeschlossenes Inkrement:** I1 – docs_template-Baseline eingeführt (2026-10-11)
 **Nächster Schritt:** I2 – Installations- und Verzeichnis-Härtung (Dienst-Binary und Datenverzeichnis gegen Manipulation durch Nicht-Admins absichern)
