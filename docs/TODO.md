@@ -110,6 +110,30 @@ Bedrohung 3. Dateien: `ProcessMonitorWorker.cs`, neue Klasse für die Maskierung
 
 - [ ] Kein unmaskiertes Beispiel-Secret aus den Testfällen im erzeugten JSON-Log (Integrationstest oder dokumentierter Handtest)
 
+### I8: Auslieferung mit gepatchter Runtime neu bauen, Patchstand prüfbar machen
+
+Aus dem Kadenz-Sweep vom 2026-10-23 (`docs/security/DEPENDENCY_AUDIT.md`, Bedrohung 7 in
+`docs/security/THREAT_MODEL.md`): Runtime-Pack `win-x64` ≤ 9.0.20 mit High-Advisories (u. a. CVE-2026-70197, RCE);
+das vorhandene lokale Publish-Artefakt bündelt 9.0.6. Nach der Schweregrad-Politik High: blockiert I2 bis zur
+Mitigation; unabhängig von I3 und sofort umsetzbar. Dateien: `ProcessMonitorService.csproj` (Build-Prüfung),
+`README.md`, `docs/operations/DEPLOYMENT.md`.
+
+**Aufgaben:**
+
+- [ ] Self-contained neu veröffentlichen mit SDK ≥ 9.0.319; im neuen `ProcessMonitorService.deps.json`
+      `runtimepack.Microsoft.NETCore.App.Runtime.win-x64/9.0.21` (oder höher) nachweisen
+- [ ] Neues Artefakt auf alle Instanzen verteilen; Bestand der Instanzen und ihr vorheriger Runtime-Stand nur in
+      `docs/local/`
+- [ ] Publish bricht ab, wenn der gebündelte Runtime-Pack unter einer konfigurierten Mindestversion liegt (MSBuild-Target
+      oder Prüfschritt im Build-Ablauf; Test zuerst: Rot mit absichtlich zu hoher Mindestversion)
+- [ ] README: Mindestversion PowerShell 7.6.7 für `process-JSONFiles.ps1` (CVE-2026-96251/-96303; 7.4/7.5 enden am
+      2026-11-10); `docs/operations/DEPLOYMENT.md`: Patchstand-Nachweis als Schritt nach jedem Publish
+
+**Zusätzliche DoD:**
+
+- [ ] Runtime-Stand des verteilten Artefakts im CHANGELOG generisch belegt (Versionsnummer, keine Hostnamen)
+- [ ] Wird I3 vorher abgeschlossen, entfällt der 9.0.21-Neubau; die Patchstand-Prüfung bleibt Aufgabe (dann gegen 10.0.x)
+
 ---
 
 ## Mittlere Priorität

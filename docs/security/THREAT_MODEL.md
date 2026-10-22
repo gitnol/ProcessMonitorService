@@ -140,6 +140,12 @@ keine Sicherheitsupdates mehr; seit 9.0.6 sind mehrere Patch-Releases mit CVE-Fi
 **Restrisiko:** Mittel – keine bekannte Schwachstelle in den genutzten Komponenten belegt, aber Patchstand unbekannt
 (hängt vom Build-SDK ab) und Support-Ende in vier Wochen.
 
+**Stand 2026-10-23 (Kadenz-Sweep):** Jetzt belegt. Die GitHub-Advisories vom 2026-10-13 führen den Runtime-Pack
+`Microsoft.NETCore.App.Runtime.win-x64` 9.0.0–9.0.20 als betroffen (u. a. CVE-2026-70197, RCE, High; mehrere DoS);
+Fix 9.0.21. Das vorhandene lokale Publish-Artefakt bündelt 9.0.6. Der NuGet-Scanner meldet den Runtime-Pack nicht —
+der Patchstand muss am Artefakt selbst geprüft werden. Zusätzliche Mitigation: I8 (Neubau mit SDK ≥ 9.0.319,
+Patchstand-Prüfung beim Publish). Restrisiko bis zur Neuverteilung: **Hoch**; danach wieder Mittel bis I3.
+
 ---
 
 ## Geprüft und verworfen
@@ -159,4 +165,4 @@ keine Sicherheitsupdates mehr; seit 9.0.6 sind mehrere Patch-Releases mit CVE-Fi
 - Dieses Dokument wird bei jeder neuen Funktion geprüft, die externe Eingaben verarbeitet
   oder auf sensible Ressourcen zugreift — anhand der Leitfragen in `security/THREAT_MODEL_GUIDE.md`.
 - Neue Bedrohungen als ADR dokumentieren wenn sie eine Architekturentscheidung auslösen.
-- Quellen der Web-Recherche (2026-10-11): `security/DEPENDENCY_AUDIT.md` → Befunde.
+- Quellen der Web-Recherche (2026-10-11, Kadenz-Sweep 2026-10-23): `security/DEPENDENCY_AUDIT.md` → Befunde.

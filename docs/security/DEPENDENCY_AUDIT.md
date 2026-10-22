@@ -51,6 +51,42 @@ Ablage für Scanner- und Recherche-Ergebnisse (`principles/SECURITY_CURRENCY.md`
 Öffentliches oder potenziell öffentliches Repo: die Betroffenheit **konkreter interner Hosts** nur in `docs/local/`,
 hier nur generisch (`CONVENTIONS_COMMON.md` 3.1).
 
+### 2026-10-23 – Kadenz-Sweep (vorgezogen, fällig 2026-10-25)
+
+Zeitraum: seit dem Sweep vom 2026-10-11 (Quellen als Liste abgerufen, Websuche nur ergänzend). Bestand:
+`ProcessMonitorService.csproj` unverändert seit 2026-10-11 (Pakete wie in `architecture/DEPENDENCIES.md`);
+`obj/project.assets.json` ist jünger als das csproj, der Scanner lief daher ohne Restore. Build-Umgebung des
+Entwicklungsrechners: .NET SDK 9.0.319 (bündelt Runtime 9.0.21), PowerShell 7.6.7. Vorhandenes lokales
+Publish-Artefakt (`bin\Release\net9.0-windows\win-x64\publish\`, nicht versioniert, gebaut Juni 2025): Runtime-Pack
+`Microsoft.NETCore.App.Runtime.win-x64` **9.0.6** (laut `ProcessMonitorService.deps.json`, `System.Private.CoreLib.dll`
+9.0.6), `msquic.dll` 2.4.8; als einziges Framework `Microsoft.NETCore.App` (kein ASP.NET Core, kein WindowsDesktop).
+Skripte: `install.ps1`, `uninstall.ps1`, `Set-SecureACLs.ps1`, `Deploy-ProcessMonitorService.ps1` zielen auf Windows
+PowerShell 5.1 (`#Requires -Version 5.x`, Selbst-Elevation über `powershell.exe`); `process-JSONFiles.ps1` läuft
+faktisch nur unter PowerShell 7 (KNOWN_ISSUES K2).
+
+| Prüfgegenstand | Ergebnis | Bewertung (betrifft uns / nicht, Begründung) | Quelle |
+|---|---|---|---|
+| NuGet-Scanner, direkte + transitive Pakete | `dotnet list ProcessMonitorService.csproj package --vulnerable --include-transitive`: „keine anfälligen Pakete" | Nein — kein bekannter Befund für die Pakete auf 9.0.6/3.0.0/Serilog-Ständen. Der Scanner prüft den gebündelten Runtime-Pack **nicht** (siehe nächste Zeilen) | NuGet-Audit-API (`https://api.nuget.org/v3/index.json`) |
+| .NET 9 Oktober-Servicing | 9.0.21 vom 2026-10-13 (SDK 9.0.319), `cve-list` mit 42 CVEs (RCE, EoP, DoS, Information Disclosure, Security Feature Bypass; viele in ASP.NET Core und SDK); `support-phase` maintenance, `eol-date` 2026-11-10 | **Ja** für die self-contained Auslieferung: jede mit SDK < 9.0.319 gebaute Auslieferung bündelt eine Runtime ≤ 9.0.20; das vorhandene lokale Artefakt bündelt 9.0.6. ASP.NET-Core-CVEs: nein (Framework nicht im Artefakt). SDK-CVEs (EoP/RCE/Bypass im SDK): Build-Rechner mit 9.0.319 gepatcht | https://builds.dotnet.microsoft.com/dotnet/release-metadata/9.0/releases.json ; https://github.com/dotnet/core/blob/main/release-notes/9.0/9.0.21/9.0.21.md |
+| GitHub-Advisories `dotnet/runtime` ab 2026-10-11 (14 Einträge) | Runtime-Pack `win-x64` ≤ 9.0.20 (Fix 9.0.21): CVE-2026-70197 (RCE, High, nur Windows-Packs), CVE-2026-69651, CVE-2026-58280, CVE-2026-96233 (DoS, High), CVE-2026-66822 (Information Disclosure, Medium). CVE-2026-96225/-96231 (EoP) nur Linux-/macOS-Packs. `System.Security.Cryptography.Xml`/`.Pkcs` (CVE-2026-96958/-96959/-96960/-96222/-84008/-70162). MsQuic: CVE-2026-85790 (< 2.5.12, Medium), CVE-2026-105016 (nur CI-Vorabversion) | **Ja** (High) für den Runtime-Pack: Komponente ist im Artefakt verbaut; die Ausnutzungsbedingungen von CVE-2026-70197 sind nicht veröffentlicht, der Dienst läuft als LocalSystem → Schweregrad-Politik High, Maßnahme I8. Cryptography.Xml/Pkcs: nein — nicht im Paketgraph (`project.assets.json`). CVE-2026-85790: `msquic.dll` 2.4.8 liegt im Artefakt, der Dienst nutzt kein QUIC und keine Netzwerkverbindung → praktisch nein, mit dem Neubau erledigt. CVE-2026-105016: nein | `gh api repos/dotnet/runtime/security-advisories` |
+| GitHub Advisory Database, Ökosystem NuGet, veröffentlicht ab 2026-10-11 | Keine Advisory zu `Serilog.*`, `Microsoft.Extensions.Hosting*`, `Microsoft.Extensions.Diagnostics.HealthChecks`, `System.Management`, `Microsoft.Management.Infrastructure`. Repo-Advisories `serilog/serilog`, `serilog-sinks-file`, `-sinks-console`, `-settings-configuration`, `-extensions-hosting`, `-formatting-compact`, `dotnet/extensions`, `PowerShell/MMI`: leer | Nein | `gh api "/advisories?ecosystem=nuget&published=>=2026-10-11"` ; `gh api repos/<org>/<repo>/security-advisories` |
+| PowerShell 7 Advisories, Kanal Dateien (`pwsh/2026/10`, `pwsh/2026/09`) | `CVE-2026-96251.md` (RCE, alle Betriebssysteme) und `CVE-2026-96303.md` (Security Feature Bypass, nur Windows), beide 2026-10-13, behoben in 7.4.21 / 7.5.12 / 7.6.7; Ordner `2026/09` existiert nicht | Bedingt — beide betreffen nur PowerShell 7, nicht Windows PowerShell 5.1 (Ziel von Installation, Deinstallation, ACL- und Deploy-Skript). `process-JSONFiles.ps1` läuft faktisch nur unter PowerShell 7: ausführende Rechner brauchen ≥ 7.6.7 (bzw. 7.4.21/7.5.12). Entwicklungsrechner 7.6.7: gepatcht | `gh api repos/PowerShell/Announcements/contents/pwsh/2026/10` |
+| PowerShell, Kanal-Abgleich Issues + Releases | Issue-Liste `PowerShell/Announcements`: kein Eintrag seit 2026-09-23 (die Oktober-Advisories fehlen dort). Releases im Zeitraum: 7.4.21/7.5.12/7.6.7 (2026-10-13) passen zu den Datei-Advisories; 7.6.8 (2026-10-22, aktuell) ohne Sicherheitsinhalt (Update-Benachrichtigung entfernt, .NET SDK 10.0.402) | Keine Kanal-Lücke: jedem Sicherheits-Release ist ein Advisory zugeordnet | `gh issue list -R PowerShell/Announcements --state all` ; `gh release list -R PowerShell/PowerShell` |
+| PowerShell-/.NET-Lebenszyklus | PowerShell 7.4 (LTS, .NET 8) und 7.5 (.NET 9) enden mit ihrer .NET-Basis am 2026-11-10 (`eol-date` .NET 8 und 9); aktuelle LTS ist 7.6. .NET 10: 10.0.13 vom 2026-10-13 (SDK 10.0.402), Support bis 2028-11-14 | Ja für I7: bei `#Requires -Version 7.x` für `process-JSONFiles.ps1` mindestens 7.6 verlangen. Für I3: Ziel-Runtime ≥ 10.0.13 | https://learn.microsoft.com/en-us/powershell/scripting/install/powershell-support-lifecycle ; https://builds.dotnet.microsoft.com/dotnet/release-metadata/8.0/releases.json ; `…/10.0/releases.json` |
+| Websuche, versionsspezifisch | „Serilog.Sinks.File 7.0.0 / Serilog.Settings.Configuration 9.0.0 vulnerability CVE October 2026", „System.Management / Microsoft.Management.Infrastructure NuGet vulnerability CVE 2026": keine Treffer zu den verbauten Versionen | Nein — Textsuche ist kein Vollständigkeitsbeweis, die Listen-Abrufe oben sind maßgeblich | https://www.nuget.org/packages/serilog.sinks.file |
+
+Offen aus diesem Sweep:
+
+- **Neubau der Auslieferung mit gepatchter Runtime** (SDK ≥ 9.0.319 → Runtime 9.0.21) und Neuverteilung; welche
+  Runtime die installierten Instanzen bündeln, ist aus dem Repo nicht feststellbar (Bestand gehört nach `docs/local/`)
+  → I8 (High, blockiert I2 nach der Schweregrad-Politik bis zur Mitigation).
+- **Patchstand der gebündelten Runtime im Build prüfbar machen** — der NuGet-Scanner deckt den Runtime-Pack nicht ab
+  → I8.
+- Bedingungen von CVE-2026-70197 (MSRC-Details nicht veröffentlicht) beim nächsten Sweep nachsehen.
+- Mindestversion PowerShell 7.6.7 für `process-JSONFiles.ps1` dokumentieren → I8 (README), `#Requires` → I7.
+
+### 2026-10-11 – Init-Recherche
+
 Bestand für den Abgleich: `ProcessMonitorService.csproj` (Stand 2026-10-11), siehe `architecture/DEPENDENCIES.md`.
 Kein Scanner-Lauf (kein Restore im Init-Lauf) — nur Web-Recherche.
 

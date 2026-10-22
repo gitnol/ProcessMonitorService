@@ -1,12 +1,12 @@
 # Aktueller Projektstatus – ProcessMonitorService
 
-Zuletzt aktualisiert: 2026-10-22
+Zuletzt aktualisiert: 2026-10-23
 **Initialisiert mit:** docs_template v27@5ce0f84 → v27@2268889 → v28@63b85ec (2026-10-22, Delta-Update)
 **Stack / Overlays:** csharp-console / keine
 **Letztes abgeschlossenes Inkrement:** I1 – docs_template-Baseline eingeführt (2026-10-11)
 **Nächster Schritt:** I2 – Installations- und Verzeichnis-Härtung (Dienst-Binary und Datenverzeichnis gegen Manipulation durch Nicht-Admins absichern)
 **Nächste Reflexion:** bei Abschluss von I3 (siehe `KICKOFF.md` Phase 1c → `docs/REFLECTION.md` — `docs/`-Drift prüfen + Template-Backport prüfen; danach Marker um 3 erhöhen)
-**Nächster Security-Sweep:** 2026-10-25 (Intervall 14 Tage; siehe `KICKOFF.md` Phase 1 Punkt 4a → `docs/principles/SECURITY_CURRENCY.md` — fällig, sobald heute ≥ diesem Datum; nach dem Sweep Marker = Sweep-Datum + Intervall)
+**Nächster Security-Sweep:** 2026-11-06 (Intervall 14 Tage; siehe `KICKOFF.md` Phase 1 Punkt 4a → `docs/principles/SECURITY_CURRENCY.md` — fällig, sobald heute ≥ diesem Datum; nach dem Sweep Marker = Sweep-Datum + Intervall)
 
 ---
 
@@ -19,6 +19,9 @@ restriktiver ACL angelegt wird (Bedrohungen 1 und 2 in `docs/security/THREAT_MOD
 Prüffunktionen anlegen (TDD-Startregel, `KICKOFF.md` Phase 2).
 
 Zeitkritisch danach: I3 (.NET-10-Migration) — .NET 9 erhält nach dem 2026-11-10 keine Sicherheitsupdates mehr.
+
+Aus dem Kadenz-Sweep 2026-10-23 (High-Befund, blockiert I2 bis zur Mitigation): I8 — Auslieferung mit gepatchter
+Runtime (≥ 9.0.21) neu bauen und verteilen (`docs/security/DEPENDENCY_AUDIT.md`).
 
 ---
 
@@ -40,6 +43,7 @@ Zeitkritisch danach: I3 (.NET-10-Migration) — .NET 9 erhält nach dem 2026-11-
 | I5 | Kommandozeilen im Log: Maskierung bekannter Secret-Muster, konfigurierbare Protokollierung | Hoch |
 | I6 | Dienst-Robustheit: Neustart nach kritischem Fehler, Logging-Korrekturen | Mittel |
 | I7 | Log-Analyse- und Deploy-Skript korrigieren (PowerShell-Version, CSV-Injection, Parameter) | Mittel |
+| I8 | Auslieferung mit gepatchter Runtime neu bauen, Patchstand beim Publish prüfen (Sweep 2026-10-23) | Hoch |
 
 ---
 
