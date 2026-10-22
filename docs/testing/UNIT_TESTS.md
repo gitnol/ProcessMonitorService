@@ -106,6 +106,25 @@ der Filterlogik und sind damit das fachliche Orakel.)
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
+Der Richtwert ist ein Hinweis auf ungetesteten Code, kein Qualitätsziel.
+
+---
+
+## Testgüte (Regel: `docs/principles/TEST_EFFECTIVENESS.md`)
+
+Greift für den C#-Teil ab I4 (xUnit-Projekt). Für die Pester-Tests der Skripte (ab I2) gilt bis dahin die
+Mutationsprüfung von Hand nach `KICKOFF.md` Phase 2 („Charakterisierungstests → Mutationsprüfung statt Rot").
+
+- **Mutationsprüfung:** Stryker.NET — einmalig `dotnet tool install -g dotnet-stryker` (globale Tools aktualisieren
+  sich nicht selbst: `dotnet tool update -g dotnet-stryker`), dann im Verzeichnis des Unit-Testprojekts
+  `dotnet stryker`; der HTML-Bericht liegt unter `StrykerOutput/`.
+- **Eigenschaftstests:** FsCheck mit xUnit-Anbindung (`FsCheck.Xunit`, `[Property]` statt `[Fact]`). Gefundene
+  Gegenbeispiele zusätzlich als `[Fact]`/`[InlineData]` festschreiben.
+  ```csharp
+  [Property]
+  public bool Roundtrip(string text) => Parse(Serialisiere(text)) == text;
+  ```
+
 ---
 
 ## Pflege
