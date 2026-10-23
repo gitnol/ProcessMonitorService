@@ -146,6 +146,14 @@ Fix 9.0.21. Das vorhandene lokale Publish-Artefakt bündelt 9.0.6. Der NuGet-Sca
 der Patchstand muss am Artefakt selbst geprüft werden. Zusätzliche Mitigation: I8 (Neubau mit SDK ≥ 9.0.319,
 Patchstand-Prüfung beim Publish). Restrisiko bis zur Neuverteilung: **Hoch**; danach wieder Mittel bis I3.
 
+**Stand 2026-10-23 (I8):** Build-seitig mitigiert. Das Target `CheckBundledRuntimePatchLevel` lässt keinen
+self-contained Build/Publish mit einem Runtime-Pack unter `MinimumBundledRuntimeVersion` (9.0.21) zu (`PMS0001`) und
+bricht ab, wenn der Runtime-Pack nicht feststellbar ist (`PMS0002`); Regressionstest
+`tests/RuntimePatchCheck.Tests.ps1`. Neues lokales Artefakt bündelt 9.0.21 (`deps.json`,
+`System.Private.CoreLib.dll` 9.0.21). **Offen:** Verteilung auf die installierten Instanzen (I9) — bis dahin bleibt das
+Restrisiko im Betrieb **Hoch**. Grenze der Prüfung: Sie prüft nur gegen die konfigurierte Mindestversion; dass diese nach
+einem Patch-Day angehoben wird, bleibt ein Pflegeschritt (`operations/DEPLOYMENT.md` → Build).
+
 ---
 
 ## Geprüft und verworfen

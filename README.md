@@ -146,7 +146,7 @@ Die Filterlogik arbeitet nach folgendem Prinzip:
 
 **Voraussetzungen**
 
-- .NET 9 SDK mit `winget install Microsoft.DotNet.SDK.9`
+- .NET 9 SDK **9.0.319 oder neuer** (bündelt Runtime 9.0.21) mit `winget install Microsoft.DotNet.SDK.9`
 - Pakete:
   ```powershell
   dotnet add package Microsoft.Extensions.Hosting --version 9.0.6
@@ -170,6 +170,18 @@ dotnet build
 Wird erstellt in `\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.exe`
 ```powershell
 dotnet publish -c Release -r win-x64 --self-contained true
+```
+
+**Patchstand der gebündelten Runtime:** Der self-contained Build liefert die .NET-Runtime mit; Windows Update patcht
+sie nicht. Der Build bricht deshalb mit `PMS0001` ab, wenn der Runtime-Pack unter der in
+`ProcessMonitorService.csproj` konfigurierten Mindestversion `MinimumBundledRuntimeVersion` liegt (aktuell `9.0.21`),
+und mit `PMS0002`, wenn sich der Runtime-Pack nicht feststellen lässt. Abhilfe: aktuelles .NET 9 SDK installieren und
+neu veröffentlichen. Die Ausgabe nennt den gebündelten Stand
+(`Patchstand: gebuendelter Runtime-Pack Microsoft.NETCore.App 9.0.21 …`); Nachweis am fertigen Artefakt:
+
+```powershell
+Select-String -Path .\bin\Release\net9.0-windows\win-x64\publish\ProcessMonitorService.deps.json `
+    -Pattern 'runtimepack\.Microsoft\.NETCore\.App\.Runtime\.win-x64/[\d.]+' | Select-Object -First 1
 ```
 
 ### Dienst installieren
@@ -221,6 +233,11 @@ Das Programm kann auch direkt in einer Eingabeaufforderung (mit Administratorrec
 # Log-Analyse mit PowerShell
 
 Das mitgelieferte PowerShell-Skript `process-JSONFiles.ps1` ermöglicht die komfortable Analyse der JSON-Log-Dateien.
+
+**Voraussetzung: PowerShell 7.6.7 oder neuer.** Das Skript nutzt PowerShell-7-Syntax und läuft nicht unter Windows
+PowerShell 5.1. Ältere PowerShell-7-Stände sind von CVE-2026-96251 (Remotecodeausführung) und CVE-2026-96303
+(Umgehung einer Sicherheitsfunktion) betroffen; 7.4 und 7.5 erhalten nach dem 2026-11-10 keine Updates mehr.
+Version prüfen: `$PSVersionTable.PSVersion`.
 
 ## Verwendung
 

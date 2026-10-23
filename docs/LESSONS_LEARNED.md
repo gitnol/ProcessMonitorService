@@ -10,8 +10,19 @@ dort kurze Beschreibung, hier der strukturierte Steckbrief.
 
 ---
 
-(noch keine Einträge) — I1 hat nur die Doku-Baseline eingeführt; Beobachtungen zum Template stehen als Stack-Lücken
-in `BACKLOG.md`, nicht als Lesson.
+I1 hat nur die Doku-Baseline eingeführt; Beobachtungen zum Template stehen als Stack-Lücken in `BACKLOG.md`, nicht
+als Lesson.
+
+## L1: Patchstand self-contained gebündelter Runtimes am Build prüfen, nicht am Scanner
+- Inkrement: I8
+- Scope: generisch-stack
+- Backport-Ziel: `stacks/csharp-console/` (Abschnitt Deployment/Security, MSBuild-Target-Vorlage)
+- Status: offen
+
+`dotnet list package --vulnerable` meldet den Runtime-Pack einer self-contained Auslieferung nicht. Ein MSBuild-Target
+nach `ResolveFrameworkReferences` vergleicht `ResolvedRuntimePack` (`Microsoft.NETCore.App`) mit einer
+Mindestversion und bricht fail-closed ab; Nachweis zusätzlich am Artefakt (`deps.json`), weil pauschale „mit dem
+Neubau erledigt"-Aussagen (hier MsQuic) dort widerlegt werden können.
 
 Format je Eintrag:
 

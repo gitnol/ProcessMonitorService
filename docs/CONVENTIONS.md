@@ -135,6 +135,8 @@ dotnet test tests/ProcessMonitorService.UnitTests               # Gate 4 — Uni
 
 **Stand beim Init (2026-10-11):** Kein Gate wurde ausgeführt (Testlauf ohne Build). Gate 3 ist voraussichtlich rot
 (doppelte `using System.IO;` in `Program.cs`, Compiler-Warnung CS0105) → wird in I3 behoben; Gate 4 existiert erst ab I4.
+**Stand I8 (2026-10-23, SDK 9.0.319):** Gate 1+2 und Gate 3 laufen grün (`--no-incremental`: 0 Warnungen, 0 Fehler);
+CS0105 wird trotz der doppelten `using`-Zeile nicht gemeldet — die Annahme vom Init ist damit widerlegt.
 
 Gate 4 wählt das Unit-Testprojekt; Tests, die echtes WMI/CIM brauchen, tragen `[Trait("Category", "Integration")]`
 und laufen nicht im Gate (Kernmenge der Testmarker: `docs/principles/VERTICAL_SLICE_FIRST.md`). Gibt es nur ein
@@ -169,5 +171,8 @@ auf dieses Projekt reduziert.
 Invoke-ScriptAnalyzer -Path . -Severity Warning                 # Gate 1 — Linter (PSScriptAnalyzer), Repo-Root ohne Rekursion in bin/obj
 Invoke-Pester tests/ -ExcludeTag Integration -Output Detailed   # Gate 4 — Unit-Tests (Pester; ab I2)
 ```
+
+Seit I8 liegt in `tests/` der Build-Test `RuntimePatchCheck.Tests.ps1` (Tag `Build`, läuft im Gate mit): Er ruft
+`dotnet publish` auf, braucht das .NET SDK im PATH und beim allerersten Lauf Netz für den Runtime-Pack von nuget.org.
 
 Gate 2 und Gate 3 haben in PowerShell kein eigenständiges Werkzeug; PSScriptAnalyzer deckt Stilfragen mit ab.

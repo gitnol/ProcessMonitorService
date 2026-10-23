@@ -60,7 +60,9 @@ Installation und Verteilung:
 
 ```mermaid
 flowchart LR
-    B[dotnet publish<br/>self-contained] --> PUB[publish-Ordner<br/>exe + appsettings + *.ps1]
+    B[dotnet publish<br/>self-contained] --> CHK{Runtime-Pack ≥<br/>MinimumBundledRuntimeVersion?}
+    CHK -->|nein: PMS0001/PMS0002| STOP[Abbruch, kein Artefakt]
+    CHK -->|ja| PUB[publish-Ordner<br/>exe + appsettings + *.ps1]
     PUB -->|lokal| I[install.ps1<br/>sc.exe create/start]
     PUB -->|Deploy-ProcessMonitorService.ps1<br/>Robocopy über Admin-Share| R[Zielrechner<br/>C:\Program Files\ProcessMonitorService]
     R -->|Invoke-Command| I

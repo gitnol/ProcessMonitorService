@@ -51,6 +51,8 @@ ab Version 8 ist für kommerzielle Nutzung lizenzpflichtig — 7.x pinnen oder `
 
 - Veröffentlichung **self-contained** (`dotnet publish -c Release -r win-x64 --self-contained true`): Die Runtime wird
   mit ausgeliefert; Runtime-Sicherheitsupdates erfordern Neu-Build und Neu-Verteilung (`docs/operations/DEPLOYMENT.md`).
+  Mindest-Patchstand des gebündelten Runtime-Packs: Property `MinimumBundledRuntimeVersion` im csproj (seit I8 `9.0.21`),
+  erzwungen vom Target `CheckBundledRuntimePatchLevel`. Build-Rechner braucht dafür SDK ≥ 9.0.319.
 
 ---
 

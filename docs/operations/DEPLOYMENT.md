@@ -39,6 +39,36 @@ Build-Artefakt: Ordner `bin\Release\net9.0-windows\win-x64\publish\` mit `Proces
 **Self-contained:** Die .NET-Runtime steckt im Artefakt. Nach jedem .NET-Patch-Day mit Sicherheitsfixes neu bauen und
 neu verteilen — Windows Update patcht diese Runtime nicht (`security/DEPENDENCY_AUDIT.md`).
 
+**Patchstand-Prüfung im Build (seit I8):** Das Target `CheckBundledRuntimePatchLevel` in `ProcessMonitorService.csproj`
+läuft bei jedem self-contained Build/Publish direkt nach der Auflösung der Runtime-Packs, also vor dem Kompilieren und
+bevor ein Artefakt entsteht. Es bricht ab mit
+
+| Code | Bedeutung | Abhilfe |
+|---|---|---|
+| `PMS0001` | Runtime-Pack `Microsoft.NETCore.App` liegt unter `MinimumBundledRuntimeVersion` | aktuelles SDK installieren (`dotnet --list-sdks`), neu veröffentlichen |
+| `PMS0002` | Runtime-Pack nicht feststellbar (kein oder mehrdeutiger Treffer) | Build-Ausgabe prüfen; nicht durch Abschalten des Targets umgehen |
+
+Die Mindestversion steht als Property `MinimumBundledRuntimeVersion` im csproj (Stand I8: `9.0.21`, Sweep
+2026-10-23). **Pflege:** nach jedem .NET-Patch-Day mit Sicherheitsfixes auf die neue Patch-Version anheben (eigener
+Commit). Einmalig übersteuern (`-p:MinimumBundledRuntimeVersion=<x.y.z>`) nur zum Testen, nie für ein verteiltes
+Artefakt. Framework-abhängige Builds (`--self-contained false`) prüft das Target nicht — dort patcht Microsoft Update
+die installierte Runtime. Regressionstest: `Invoke-Pester tests/RuntimePatchCheck.Tests.ps1` (ruft `dotnet publish` in
+ein temporäres Verzeichnis auf).
+
+**Patchstand-Nachweis nach jedem Publish (Pflicht):** Die Build-Ausgabe enthält die Zeile
+`Patchstand: gebuendelter Runtime-Pack Microsoft.NETCore.App <Version> (Mindestversion <Version>)`. Zusätzlich am
+fertigen Artefakt prüfen und die Version beim Release notieren (CHANGELOG, generisch ohne Rechnernamen):
+
+```powershell
+$publish = '.\bin\Release\net9.0-windows\win-x64\publish'
+Select-String -Path "$publish\ProcessMonitorService.deps.json" `
+    -Pattern 'runtimepack\.Microsoft\.NETCore\.App\.Runtime\.win-x64/[\d.]+' | Select-Object -First 1
+(Get-Item "$publish\System.Private.CoreLib.dll").VersionInfo.ProductVersion   # z. B. 9.0.21+<Commit>
+```
+
+Vor einem Neu-Publish den alten Publish-Ordner umbenennen oder leeren: `dotnet publish` überschreibt, entfernt aber
+keine Dateien, die die neue Runtime nicht mehr mitbringt.
+
 ---
 
 ## Installation
@@ -72,6 +102,7 @@ Das Projekt hat keine Versionsnummer, keine Tags und keine Release-Artefakte; ve
 |---|---|---|
 | Dependency-Audit + Security-Currency-Abgleich (Pflicht vor jedem Release) | Maintainer | datierter Eintrag in `security/DEPENDENCY_AUDIT.md` → Befunde (`principles/SECURITY_CURRENCY.md`) |
 | Build aus einem Commit auf `master` (sauberer Arbeitsbaum) | Maintainer | Commit-Hash notieren |
+| Patchstand-Nachweis am Artefakt (siehe Build) | Maintainer | Runtime-Pack-Version aus `ProcessMonitorService.deps.json` ≥ `MinimumBundledRuntimeVersion`, im CHANGELOG notiert |
 | Installation + Smoke-Test auf der Test-VM | Maintainer | Dienst `Running`, Start-/Stop-Ereignis von `notepad.exe` im JSON-Log, Statusmeldung erscheint |
 | Freigabe | Administrator des Betreibers | manuell |
 | Verteilung (lokal oder `Deploy-ProcessMonitorService.ps1`) | Administrator des Betreibers | Dienststatus je Zielrechner |

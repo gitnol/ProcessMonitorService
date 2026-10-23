@@ -12,6 +12,72 @@ Die Code-Historie vor I1 (Juni 2025) steht nur in `git log`; dieser Changelog be
 
 ---
 
+## 2026-10-23 I8 – Auslieferung mit gepatchter Runtime neu gebaut, Patchstand prüfbar
+
+Commit-Serie: `test(I8): add failing Pester tests for bundled runtime patch check` (5458925) →
+`feat(I8): fail self-contained build below minimum bundled runtime` (ff03ba8) → `docs(I8): …`.
+Anlass: Kadenz-Sweep 2026-10-23, Runtime-Pack `win-x64` ≤ 9.0.20 mit High-Advisories (Bedrohung 7).
+
+### Added
+- `ProcessMonitorService.csproj`: Property `MinimumBundledRuntimeVersion` (`9.0.21`) und Target
+  `CheckBundledRuntimePatchLevel` (nach `ResolveFrameworkReferences`, nur `SelfContained=true`, nicht in
+  Design-Time-Builds). Abbruch mit `PMS0001` unter der Mindestversion, mit `PMS0002`, wenn der Runtime-Pack
+  `Microsoft.NETCore.App` nicht eindeutig feststellbar ist; sonst Ausgabezeile „Patchstand: …".
+- `tests/RuntimePatchCheck.Tests.ps1` (Pester, Tag `Build`): erstes Testverzeichnis des Projekts.
+- README: SDK ≥ 9.0.319, Abschnitt Patchstand mit Nachweisbefehl; PowerShell ≥ 7.6.7 für `process-JSONFiles.ps1`
+  (CVE-2026-96251/-96303).
+- `docs/operations/DEPLOYMENT.md`: Patchstand-Prüfung, Pflege der Mindestversion, Pflicht-Nachweis nach jedem Publish,
+  Release-Schritt „Patchstand-Nachweis".
+
+### Changed
+- `docs/architecture/OVERVIEW.md` (Verteilungs-Flowchart mit Prüfschritt), `docs/architecture/DEPENDENCIES.md`,
+  `docs/CONVENTIONS.md` (§11 Gate-Stand, §12 Build-Test in `tests/`), `docs/TODO.md` (I8 entfernt, I9 als Rest,
+  I3-Aufgabe Mindestversion 10.0.x), `docs/STATE.md`.
+
+### Security
+- Neues lokales Artefakt (`bin\Release\net9.0-windows\win-x64\publish\`, nicht versioniert): Runtime-Pack
+  `Microsoft.NETCore.App.Runtime.win-x64/9.0.21` laut `ProcessMonitorService.deps.json`, `System.Private.CoreLib.dll`
+  `9.0.21+d280e4fb…`. Das alte Artefakt (Runtime 9.0.6) liegt umbenannt daneben (`publish_alt-runtime-9.0.6`).
+- Noch **nicht verteilt** → I9 (Nutzeraufgabe). Der High-Befund bleibt im Betrieb offen und blockiert I2.
+- `docs/security/DEPENDENCY_AUDIT.md`: Korrektur zum Sweep — CVE-2026-85790 ist mit dem Neubau **nicht** erledigt,
+  der Runtime-Pack 9.0.21 bringt `msquic.dll` 2.5.11 (< 2.5.12) mit; Bewertung bleibt „praktisch nein" (kein QUIC).
+  `docs/security/THREAT_MODEL.md` Bedrohung 7: Stand I8.
+
+### Iterations-Log
+```
+ITERATION 1 — I8 Patchstand-Prüfung beim Publish
+Ziel:         self-contained Publish scheitert unter der Mindestversion, gelingt mit 9.0.21
+RED-Beweis:   Pester 6.1.0: "[-] bricht den Publish ab …: Expected 0 to be different from the actual value"
+              (Publish mit -p:MinimumBundledRuntimeVersion=99.0.0 lief durch);
+              "[-] laesst den Publish … durch …: Expected regular expression '^\d+\.\d+\.\d+$' to match <empty>"
+GREEN-Beweis: "Tests Passed: 2, Failed: 0"; dotnet publish -p:MinimumBundledRuntimeVersion=99.0.0 →
+              "error PMS0001: Gebuendelter Runtime-Pack 9.0.21 liegt unter der Mindestversion 99.0.0";
+              regulär → "Patchstand: gebuendelter Runtime-Pack Microsoft.NETCore.App 9.0.21 (Mindestversion 9.0.21)"
+Gate:         dotnet format --verify-no-changes ✓  dotnet build -warnaserror (--no-incremental) 0 Warnungen ✓
+              Pester tests/ 2 passed ✓  PSScriptAnalyzer tests/ 0 ✓ (Bestandsskripte 112 Warnungen, unverändert)
+Commit:       5458925 (test), ff03ba8 (feat)
+```
+
+### Confidence / Ungeprüft
+- (a) Nicht getestet: Pfad `PMS0002` (Runtime-Pack nicht feststellbar) — kein Weg gefunden, ihn ohne Eingriff ins SDK
+  auszulösen; Ausschluss von Design-Time-Builds (Visual Studio) nicht geprüft. Geprüft per Handlauf: framework-abhängiger
+  Publish mit Mindestversion 99.0.0 läuft durch (Target greift nicht), `dotnet build -r win-x64 --self-contained true`
+  mit 99.0.0 scheitert mit `PMS0001`. Keine Installation, kein Dienststart mit dem neuen Artefakt (gehört zu I9).
+- (b) Ungeprüft übernommen: dass `ResolvedRuntimePack`/`FrameworkName`/`NuGetPackageVersion` in künftigen SDKs
+  (.NET 10, I3) gleich heißen — fällt das weg, greift `PMS0002` (fail closed). Mit MSBuild-`VersionLessThan` werden
+  Vorabversions-Suffixe nicht bewertet.
+- Das neue Artefakt wurde aus dem Arbeitsbaum gebaut, dessen csproj inhaltlich ff03ba8 entspricht, aber vor dem
+  docs-Commit — kein Release-Build im Sinne von `operations/DEPLOYMENT.md` („sauberer Arbeitsbaum"). Für die
+  Verteilung (I9) aus dem gepushten `master` neu veröffentlichen ist die saubere Variante.
+- (c) Ohne vollständiges Lesen geändert: `docs/CONVENTIONS.md`, `docs/architecture/OVERVIEW.md`,
+  `docs/architecture/DEPENDENCIES.md` (jeweils nur der betroffene Abschnitt gelesen).
+- Gate-3-Befund: Die Init-Annahme „CS0105 macht Gate 3 rot" ist widerlegt (0 Warnungen trotz doppelter `using`-Zeile).
+
+### Lessons Learned
+- Ein Scanner-„keine anfälligen Pakete" sagt bei self-contained Builds nichts über die gebündelte Runtime; die
+  Prüfung gehört an den Build (Runtime-Pack-Version) und an das Artefakt (`deps.json`). Pauschale Aussagen wie „mit dem
+  Neubau erledigt" am neuen Artefakt nachmessen (hier: MsQuic blieb unter dem Fix-Stand).
+
 ## 2026-10-11 I1 – docs_template-Baseline eingeführt
 
 Commit-Serie: `chore: enforce LF line endings (.gitattributes + normalize)` → `chore: extend .gitignore for docs

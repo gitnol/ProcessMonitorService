@@ -67,6 +67,8 @@ Support-Ende .NET 9 am 2026-11-10 (`docs/security/DEPENDENCY_AUDIT.md`, Befund v
 - [ ] Gate 3 lauffähig machen: doppelte `using System.IO;` in `Program.cs` (Compiler-Warnung CS0105) und weitere
       Warnungen beheben, bis `dotnet build -warnaserror` grün ist
 - [ ] README (Voraussetzungen, Build-Pfade `net10.0-windows`) und `docs/architecture/DEPENDENCIES.md` aktualisieren
+- [ ] `MinimumBundledRuntimeVersion` im csproj auf den aktuellen 10.0.x-Patchstand heben (seit I8; Test
+      `tests/RuntimePatchCheck.Tests.ps1` Untergrenze anpassen)
 
 **Zusätzliche DoD:**
 
@@ -110,29 +112,24 @@ Bedrohung 3. Dateien: `ProcessMonitorWorker.cs`, neue Klasse für die Maskierung
 
 - [ ] Kein unmaskiertes Beispiel-Secret aus den Testfällen im erzeugten JSON-Log (Integrationstest oder dokumentierter Handtest)
 
-### I8: Auslieferung mit gepatchter Runtime neu bauen, Patchstand prüfbar machen
+### I9: Gepatchtes Artefakt auf alle Instanzen verteilen (Rest aus I8)
 
-Aus dem Kadenz-Sweep vom 2026-10-23 (`docs/security/DEPENDENCY_AUDIT.md`, Bedrohung 7 in
-`docs/security/THREAT_MODEL.md`): Runtime-Pack `win-x64` ≤ 9.0.20 mit High-Advisories (u. a. CVE-2026-70197, RCE);
-das vorhandene lokale Publish-Artefakt bündelt 9.0.6. Nach der Schweregrad-Politik High: blockiert I2 bis zur
-Mitigation; unabhängig von I3 und sofort umsetzbar. Dateien: `ProcessMonitorService.csproj` (Build-Prüfung),
-`README.md`, `docs/operations/DEPLOYMENT.md`.
+Rest aus I8 (2026-10-23): Das lokale Artefakt ist mit Runtime-Pack 9.0.21 neu gebaut und die Patchstand-Prüfung greift
+beim Publish; der High-Befund aus dem Kadenz-Sweep 2026-10-23 bleibt im Betrieb offen, bis die installierten Instanzen
+ersetzt sind. Blockiert I2 nach der Schweregrad-Politik. **Nutzeraufgabe** (Verteilung auf Zielrechner), kein Code.
 
 **Aufgaben:**
 
-- [ ] Self-contained neu veröffentlichen mit SDK ≥ 9.0.319; im neuen `ProcessMonitorService.deps.json`
-      `runtimepack.Microsoft.NETCore.App.Runtime.win-x64/9.0.21` (oder höher) nachweisen
-- [ ] Neues Artefakt auf alle Instanzen verteilen; Bestand der Instanzen und ihr vorheriger Runtime-Stand nur in
-      `docs/local/`
-- [ ] Publish bricht ab, wenn der gebündelte Runtime-Pack unter einer konfigurierten Mindestversion liegt (MSBuild-Target
-      oder Prüfschritt im Build-Ablauf; Test zuerst: Rot mit absichtlich zu hoher Mindestversion)
-- [ ] README: Mindestversion PowerShell 7.6.7 für `process-JSONFiles.ps1` (CVE-2026-96251/-96303; 7.4/7.5 enden am
-      2026-11-10); `docs/operations/DEPLOYMENT.md`: Patchstand-Nachweis als Schritt nach jedem Publish
+- [ ] Neues Artefakt (`bin\Release\net9.0-windows\win-x64\publish\`, Runtime-Pack 9.0.21) auf alle Instanzen verteilen
+      (`docs/operations/DEPLOYMENT.md` → Installation/Release); Bestand der Instanzen und ihr vorheriger Runtime-Stand
+      nur in `docs/local/`
+- [ ] Je Instanz Patchstand nachweisen (`System.Private.CoreLib.dll` bzw. `ProcessMonitorService.deps.json` im
+      Installationsordner ≥ 9.0.21) und Post-Deploy-Verifikation aus `docs/operations/DEPLOYMENT.md`
 
 **Zusätzliche DoD:**
 
 - [ ] Runtime-Stand des verteilten Artefakts im CHANGELOG generisch belegt (Versionsnummer, keine Hostnamen)
-- [ ] Wird I3 vorher abgeschlossen, entfällt der 9.0.21-Neubau; die Patchstand-Prüfung bleibt Aufgabe (dann gegen 10.0.x)
+- [ ] Wird I3 vorher abgeschlossen und verteilt, entfällt I9 (dann gilt der 10.0.x-Stand)
 
 ---
 
