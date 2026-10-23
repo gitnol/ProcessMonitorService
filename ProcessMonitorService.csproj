@@ -28,4 +28,36 @@
     </None>
   </ItemGroup>
 
+  <!--
+    Patchstand der gebuendelten Runtime (docs/security/THREAT_MODEL.md Bedrohung 7, docs/operations/DEPLOYMENT.md).
+    Self-contained bringt der Build die Runtime selbst mit; Windows Update patcht sie nicht, der NuGet-Scanner meldet
+    den Runtime-Pack nicht. Liegt der aufgeloeste Runtime-Pack unter der Mindestversion, bricht der Build/Publish ab,
+    bevor ein Artefakt entsteht. Mindestversion bei jedem .NET-Patch-Day mit Sicherheitsfixes anheben;
+    einmalig uebersteuerbar per -p:MinimumBundledRuntimeVersion=<x.y.z>.
+  -->
+  <PropertyGroup>
+    <MinimumBundledRuntimeVersion>9.0.21</MinimumBundledRuntimeVersion>
+  </PropertyGroup>
+
+  <Target Name="CheckBundledRuntimePatchLevel"
+          AfterTargets="ResolveFrameworkReferences"
+          Condition="'$(SelfContained)' == 'true' And '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_BundledNetCoreRuntimePack Include="@(ResolvedRuntimePack)"
+                                  Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App'" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_BundledNetCoreRuntimeVersion>@(_BundledNetCoreRuntimePack->'%(NuGetPackageVersion)')</_BundledNetCoreRuntimeVersion>
+    </PropertyGroup>
+
+    <Error Code="PMS0002"
+           Condition="'$(_BundledNetCoreRuntimeVersion)' == '' Or '$(_BundledNetCoreRuntimeVersion.Contains(`;`))' == 'true'"
+           Text="Patchstand der gebuendelten Runtime nicht feststellbar (Runtime-Pack Microsoft.NETCore.App: '$(_BundledNetCoreRuntimeVersion)'). Build abgebrochen." />
+    <Error Code="PMS0001"
+           Condition="$([MSBuild]::VersionLessThan('$(_BundledNetCoreRuntimeVersion)', '$(MinimumBundledRuntimeVersion)'))"
+           Text="Gebuendelter Runtime-Pack $(_BundledNetCoreRuntimeVersion) liegt unter der Mindestversion $(MinimumBundledRuntimeVersion) (MinimumBundledRuntimeVersion). Mit aktuellem .NET SDK neu veroeffentlichen." />
+    <Message Importance="high"
+             Text="Patchstand: gebuendelter Runtime-Pack Microsoft.NETCore.App $(_BundledNetCoreRuntimeVersion) (Mindestversion $(MinimumBundledRuntimeVersion))" />
+  </Target>
+
 </Project>
