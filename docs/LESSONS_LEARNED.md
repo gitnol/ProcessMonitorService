@@ -17,7 +17,7 @@ als Lesson.
 - Inkrement: I8
 - Scope: generisch-stack
 - Backport-Ziel: `stacks/csharp-console/` (Abschnitt Deployment/Security, MSBuild-Target-Vorlage)
-- Status: offen
+- Status: backported v32@e8eaf0f
 
 `dotnet list package --vulnerable` meldet den Runtime-Pack einer self-contained Auslieferung nicht. Ein MSBuild-Target
 nach `ResolveFrameworkReferences` vergleicht `ResolvedRuntimePack` (`Microsoft.NETCore.App`) mit einer
